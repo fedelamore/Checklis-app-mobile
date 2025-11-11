@@ -5,16 +5,38 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { storage } from '@/utils/storage';
+import { loginRequest } from '@/services/auth';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    storage.setUser({ email });
-    navigate('/');
+    setError(null);
+    setLoading(true);
+
+    try {
+      const { authorization, user } = await loginRequest(email, password);
+
+      // sucesso
+      storage.setUser({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        authorization,
+      });
+
+      navigate('/');
+    } catch (err: any) {
+      // erro
+      setError(err.message || 'Erro ao autenticar. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -30,6 +52,12 @@ const Login = () => {
         <p className="text-center text-muted-foreground mb-8">
           Digite sua credencial para acessar o sistema
         </p>
+
+        {error && (
+          <div className="mb-4 text-sm text-red-500 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+            {error}
+          </div>
+        )}
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-2">
@@ -58,8 +86,12 @@ const Login = () => {
             />
           </div>
 
-          <Button type="submit" className="w-full h-12 text-base font-semibold">
-            Entrar
+          <Button
+            type="submit"
+            className="w-full h-12 text-base font-semibold"
+            disabled={loading}
+          >
+            {loading ? 'Entrando...' : 'Entrar'}
           </Button>
         </form>
       </div>
