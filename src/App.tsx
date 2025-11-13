@@ -8,7 +8,7 @@ import Home from "./pages/Home";
 import Checklists from "./pages/Checklists";
 import CreateChecklist from "./pages/CreateChecklist";
 import EditChecklist from "./pages/EditChecklist";
-import ChecklistDetail from "./pages/ChecklistDetail";
+import ChecklistDetail from "./pages/ChecklistDetail2";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 

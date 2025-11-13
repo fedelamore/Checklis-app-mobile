@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'; // ✅ importados
 import { User, ClipboardList, Clock, CheckCircle, Pencil, Trash2 } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
 import { storage } from '@/utils/storage';
-import { Checklist } from '@/types/checklist';
+import { Checklist, ChecklistApiResponse } from '@/types/checklist';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -18,9 +18,11 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 
+const API_URL = import.meta.env.VITE_API_URL || '';
+
 const Checklists = () => {
   const [checklists, setChecklists] = useState<Checklist[]>([]);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -34,51 +36,63 @@ const Checklists = () => {
     loadChecklists();
   }, []);
 
-  // ✅ Normaliza os itens do storage (datas/ids)
-  const loadChecklists = () => {
-    const raw = storage.getChecklists?.() ?? [];
+  const loadChecklists = async () => {
+    try {
+      const currentUserStr = localStorage.getItem('current_user');
 
-    const normalized = raw
-      .filter(Boolean)
-      .map((c: any) => {
-        const data = c.dataCriacao || c.dataCriação || c.createdAt || c.dataCreation;
-        const safeISO = (() => {
-          try {
-            const d = data ? new Date(data) : null;
-            if (d && !isNaN(d.getTime())) return d.toISOString();
-          } catch {}
-          return new Date().toISOString();
-        })();
+      if (!currentUserStr) {
+        toast.error('Usuário não encontrado. Faça login novamente.');
+        navigate('/login');
+        return;
+      }
 
-        return {
-          id: c.id ?? String(c.timestamp ?? Date.now()),
-          motorista: c.motorista ?? '',
-          placa: c.placa ?? '',
-          dataCriacao: safeISO,
-          sincronizado: !!c.sincronizado,
-          pendente: !!c.pendente,
-          ...c,
-        } as Checklist;
+      const currentUser = JSON.parse(currentUserStr);
+      const token = currentUser?.authorization?.token;
+
+      if (!token) {
+        toast.error('Token não encontrado. Faça login novamente.');
+        navigate('/login');
+        return;
+      }
+
+      const response = await fetch(`${API_URL}/checklists`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
       });
 
-    setChecklists(normalized);
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error?.message || 'Erro ao carregar checklists');
+      }
 
-    if (typeof storage.overwriteChecklists === 'function') {
-      storage.overwriteChecklists(normalized);
+      const result: ChecklistApiResponse = await response.json();
+
+      if (result.success && result.data?.data) {
+        setChecklists(result.data.data);
+      } else {
+        toast.error('Erro ao processar dados dos checklists');
+      }
+    } catch (error) {
+      console.error('Erro ao carregar checklists:', error);
+      toast.error(error instanceof Error ? error.message : 'Erro ao carregar checklists');
     }
   };
 
   const handleDelete = () => {
     if (deleteId) {
-      storage.deleteChecklist?.(deleteId);
+      storage.deleteChecklist?.(String(deleteId));
       loadChecklists();
       toast.success('Checklist excluído com sucesso');
       setDeleteId(null);
     }
   };
 
-  const concluidos = checklists.filter(c => c.sincronizado);
-  const pendentes = checklists.filter(c => !c.sincronizado);
+  const concluidos = checklists.filter(c => c.status === 'concluido');
+  const pendentes = checklists.filter(c => c.status === 'em_andamento');
 
   // ✅ Datas seguras (evita RangeError)
   const formatDateParts = (iso?: string) => {
@@ -91,8 +105,34 @@ const Checklists = () => {
     }
   };
 
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'em_andamento':
+        return 'Em andamento';
+      case 'concluido':
+        return 'Concluído';
+      case 'cancelado':
+        return 'Cancelado';
+      default:
+        return status;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'em_andamento':
+        return 'text-warning';
+      case 'concluido':
+        return 'text-success';
+      case 'cancelado':
+        return 'text-destructive';
+      default:
+        return 'text-muted-foreground';
+    }
+  };
+
   const ChecklistCard = ({ checklist }: { checklist: Checklist }) => {
-    const { date, time } = formatDateParts(checklist.dataCriacao); // ✅ agora existe
+    const { date, time } = formatDateParts(checklist.created_at);
     return (
       <Card className="p-4">
         <div className="flex items-start justify-between gap-3">
@@ -100,14 +140,20 @@ const Checklists = () => {
             className="flex-1 cursor-pointer"
             onClick={() => navigate(`/checklist/${checklist.id}`)}
           >
-            <h3 className="font-semibold">{checklist.motorista || 'Sem nome'}</h3>
-            <p className="text-sm text-muted-foreground">Placa: {checklist.placa || '—'}</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {date} às {time}
-            </p>
+            <h3 className="font-semibold">{checklist.formulario.nome}</h3>
+            <p className="text-sm text-muted-foreground">{checklist.formulario.descricao}</p>
+            <div className="flex items-center gap-2 mt-2">
+              <span className={`text-sm font-medium ${getStatusColor(checklist.status)}`}>
+                {getStatusLabel(checklist.status)}
+              </span>
+              <span className="text-xs text-muted-foreground">•</span>
+              <span className="text-xs text-muted-foreground">
+                {date} às {time}
+              </span>
+            </div>
           </div>
           <div className="flex items-center gap-2">
-            {checklist.sincronizado ? (
+            {checklist.status === 'concluido' ? (
               <CheckCircle className="w-5 h-5 text-success" />
             ) : (
               <Clock className="w-5 h-5 text-warning" />
