@@ -29,12 +29,7 @@ const Profile = () => {
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium text-muted-foreground">Nome</label>
-              <p className="text-lg font-semibold mt-1">Usuário do Sistema</p>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">CPF</label>
-              <p className="text-lg font-semibold mt-1">000.000.000-00</p>
+              <p className="text-lg font-semibold mt-1">{user?.name}</p>
             </div>
 
             <div>
@@ -44,7 +39,7 @@ const Profile = () => {
 
             <div>
               <label className="text-sm font-medium text-muted-foreground">Empresa</label>
-              <p className="text-lg font-semibold mt-1">Local GPS</p>
+              <p className="text-lg font-semibold mt-1">?</p>
             </div>
           </div>
         </Card>

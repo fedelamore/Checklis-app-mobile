@@ -27,10 +27,24 @@ interface Campo {
   opcoes?: string | null; // vem como string JSON
 }
 
-interface ChecklistResponse {
+interface RespostaSalva {
+  id: number;
+  id_resposta: number;
+  id_campo: number;
+  valor: {
+    tipo: CampoTipo;
+    valor: any;
+  };
+  created_at: string;
+  updated_at: string;
+}
+
+interface ChecklistData {
   id: number;
   titulo: string;
   campos: Campo[];
+  resposta: Object;
+  respostasSalvas?: Record<string, RespostaSalva>;
 }
 
 type FormValues = Record<string, any>;
@@ -43,6 +57,7 @@ export function ChecklistForm() {
 
   const [titulo, setTitulo] = useState<string>("");
   const [campos, setCampos] = useState<Campo[]>([]);
+  const [checklistResposta, setChecklistResposta] = useState<Object>({});
   const [formValues, setFormValues] = useState<FormValues>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -77,29 +92,46 @@ export function ChecklistForm() {
         }
 
         const res = await fetch(`${API_URL}/checklist/${id}`, {
-          method: "GET", // opcional, pois GET é o padrão
+          method: "GET", 
           headers: {
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "Authorization": `Bearer ${token}`, // se você usa token JWT
-            "X-Requested-With": "XMLHttpRequest", // útil em Laravel
+            "Authorization": `Bearer ${token}`, 
+            "X-Requested-With": "XMLHttpRequest", 
           },
         });
         if (!res.ok) throw new Error("Erro ao buscar checklist");
 
-        const data: ChecklistResponse = await res.json();
+        const data: { data: ChecklistData } = await res.json();
         console.log("data: ", data);
 
         setTitulo(data.data.titulo || "Checklist");
         setCampos(data.data.campos || []);
+        setChecklistResposta(data.data.resposta);
+        console.log("checklistResposta: ", checklistResposta)
+        const savedValues = data.data.respostasSalvas;
+        const savedValuesMap = new Map<number, any>();
+        if (savedValues && Object.keys(savedValues).length > 0) {
+          Object.values(savedValues).forEach(resposta => {
+            console.log("resposta: ", resposta)
+            if (resposta.id_campo) {
+              savedValuesMap.set(resposta.id_campo, resposta.valor.valor);
+            }
+          });
+        }
 
+        console.log("savedValuesMap: ", savedValuesMap)
         // inicializa valores
         const init: FormValues = {};
         (data.data.campos || []).forEach((campo, index) => {
           const key = getCampoKey(campo, index);
-          init[key] = campo.tipo === "select_multiplo" ? [] : "";
+
+          console.log("campo: ", campo)
+          const savedValue = campo.id ? savedValuesMap.get(campo.id) : undefined;
+          console.log("savedValue: ", savedValue)
+          init[key] = savedValue ?? (campo.tipo === "select_multiplo" ? [] : "");
         });
-        console.log("init: ", init);
+        console.log("init: ", init)
         setFormValues(init);
       } catch (err: any) {
         setError(err.message || "Erro inesperado");
@@ -110,6 +142,11 @@ export function ChecklistForm() {
 
     fetchData();
   }, [id]);
+
+  //salvar resposta por campo
+  function salvarCampo() {
+
+  }
 
   // chave única para cada campo
   function getCampoKey(campo: Campo, index: number) {
@@ -248,7 +285,57 @@ export function ChecklistForm() {
     }
 
     setFormValues((prev) => ({ ...prev, [key]: e.target.value }));
+
+    console.log("campo!: ", campo)
+    console.log("index!: ", index)
+    console.log("e!: ", e)
+    sendValueCampo(e.target.value, campo, checklistResposta)
   }
+
+  async function sendValueCampo(valor, campo, resposta) {
+    try {
+      const currentUserStr = localStorage.getItem('current_user');
+      if (!currentUserStr) {
+        toast.error('Usuário não encontrado. Faça login novamente.');
+        navigate('/login');
+        return;
+      }
+
+      const currentUser = JSON.parse(currentUserStr);
+      const token = currentUser?.authorization?.token;
+
+      const res = await fetch(`${API_URL}/salvar_campo`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`, 
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({ 
+          valor: valor,
+          id_campo: campo.id,
+          id_resposta: resposta.id,
+          web: 0
+        }),
+      });
+
+      console.log('[auth] HTTP status', res.status);
+    
+      if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          console.error('[auth] login error body', err);
+          throw new Error(err?.message || 'Erro ao autenticar');
+      }
+
+      const data = (await res.json());
+      console.log('sendValueCampo', data);
+      return data;
+    } catch (error) {
+        console.error('[auth] loginRequest caught', error);
+        throw error;
+      }
+    }
 
   function handleFileChange(
     campo: Campo,
@@ -292,7 +379,7 @@ export function ChecklistForm() {
       console.log("Valores do formulário:", formValues);
 
       const currentUserStr = localStorage.getItem('current_user');
-      if (!currentUserStr) {
+      if (!currentUserStr || !checklistResposta || !('id' in checklistResposta)) {
         toast.error('Usuário não encontrado. Faça login novamente.');
         navigate('/login');
         return;
@@ -307,15 +394,16 @@ export function ChecklistForm() {
         return;
       }
 
-      // Aqui você faz POST/PUT para a API de respostas
-      // const response = await fetch(`${API_URL}/checklist/${id}/respostas`, {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //     'Authorization': `Bearer ${token}`,
-      //   },
-      //   body: JSON.stringify(formValues)
-      // });
+      const response = await fetch(`${API_URL}/checklist/${id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          id_resposta: checklistResposta.id
+        })
+      });
 
       toast.success("Checklist enviado com sucesso!");
       navigate("/checklists");
@@ -617,4 +705,3 @@ export function ChecklistForm() {
 }
 
 export default ChecklistForm;
-
