@@ -6,7 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
 import Checklists from "./pages/Checklists";
-import CreateChecklist from "./pages/CreateChecklist";
+import CreateChecklist from "./pages/CreateChecklist2";
 import EditChecklist from "./pages/EditChecklist";
 import ChecklistDetail from "./pages/ChecklistDetail2";
 import Profile from "./pages/Profile";
