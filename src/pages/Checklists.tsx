@@ -66,6 +66,13 @@ const Checklists = () => {
           },
         });
 
+        if (response.status === 401) {
+          toast.error('Sessão expirada. Faça login novamente.');
+          localStorage.removeItem('current_user');
+          navigate('/login');
+          return;
+        }
+
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
@@ -86,6 +93,14 @@ const Checklists = () => {
           toast.error('Erro ao processar dados dos checklists');
         }
       } catch (fetchError) {
+        // Verifica se o erro contém status 401
+        if (fetchError instanceof Error && fetchError.message.includes('HTTP 401')) {
+          toast.error('Sessão expirada. Faça login novamente.');
+          localStorage.removeItem('current_user');
+          navigate('/login');
+          return;
+        }
+
         console.warn('[Checklists] API fetch failed, trying local storage:', fetchError);
 
         // Tenta buscar do localStorage (fallback offline)
