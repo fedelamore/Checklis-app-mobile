@@ -1,13 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, ClipboardList, Clock } from 'lucide-react';
+import { User, ClipboardList, Clock, RefreshCw } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
 import { storage } from '@/utils/storage';
-import { Checklist } from '@/types/checklist';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { getUnsyncedFormResponses } from '@/services/db/checklists-db';
+import { FormResponseDB } from '@/services/db';
+import { syncManager } from '@/services/sync-manager';
+import { toast } from 'sonner';
 
 const Home = () => {
-  const [pendingChecklists, setPendingChecklists] = useState<Checklist[]>([]);
+  const [pendingResponses, setPendingResponses] = useState<FormResponseDB[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -20,10 +25,28 @@ const Home = () => {
     loadPendingChecklists();
   }, [navigate]);
 
-  const loadPendingChecklists = () => {
-    const checklists = storage.getChecklists();
-    const pending = checklists.filter(c => !c.sincronizado);
-    setPendingChecklists(pending);
+  const loadPendingChecklists = async () => {
+    // Carrega respostas não sincronizadas do IndexedDB
+    const unsynced = await getUnsyncedFormResponses();
+    console.log('[Home] Unsynced responses:', unsynced);
+    setPendingResponses(unsynced);
+  };
+
+  const handleManualSync = async () => {
+    if (isSyncing) return;
+
+    setIsSyncing(true);
+    toast.info('Iniciando sincronização...');
+
+    try {
+      await syncManager.syncAll();
+      // Recarrega a lista após sincronizar
+      await loadPendingChecklists();
+    } catch (error) {
+      console.error('[Home] Sync error:', error);
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   return (
@@ -42,9 +65,23 @@ const Home = () => {
       </header>
 
       <div className="p-4">
-        <h2 className="text-lg font-semibold mb-4">Checklists pendentes</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">Checklists pendentes de sincronização</h2>
+          {pendingResponses.length > 0 && (
+            <Button
+              onClick={handleManualSync}
+              disabled={isSyncing}
+              size="sm"
+              variant="outline"
+              className="gap-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+              {isSyncing ? 'Sincronizando...' : 'Sincronizar'}
+            </Button>
+          )}
+        </div>
 
-        {pendingChecklists.length === 0 ? (
+        {pendingResponses.length === 0 ? (
           <Card className="p-12">
             <div className="flex flex-col items-center justify-center text-center">
               <ClipboardList className="w-16 h-16 text-muted-foreground mb-4" strokeWidth={1.5} />
@@ -55,17 +92,24 @@ const Home = () => {
           </Card>
         ) : (
           <div className="space-y-3">
-            {pendingChecklists.map((checklist) => (
+            {pendingResponses.map((response) => (
               <Card
-                key={checklist.id}
+                key={response.id}
                 className="p-4 hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => navigate(`/checklist/${checklist.id}`)}
+                onClick={() => navigate(`/checklist/${response.checklistId}`)}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
-                    <h3 className="font-semibold">{checklist.motorista}</h3>
+                    <h3 className="font-semibold">
+                      Checklist #{response.checklistId}
+                      {response.serverChecklistId && ` (Server: #${response.serverChecklistId})`}
+                    </h3>
                     <p className="text-sm text-muted-foreground">
-                      Placa: {checklist.placa} • {new Date(checklist.dataCriacao).toLocaleDateString()}
+                      Criado em: {new Date(response.createdAt).toLocaleString('pt-BR')}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Status: {response.syncStatus === 'local_only' ? 'Apenas local' : response.syncStatus}
+                      {response.isComplete && ' • Completo'}
                     </p>
                   </div>
                   <Clock className="w-5 h-5 text-warning" />

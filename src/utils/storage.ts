@@ -45,6 +45,11 @@
 
       clearUser: (): void => {
         localStorage.removeItem(USER_KEY);
+      },
+
+      // Limpa checklists antigos do localStorage (migrando para IndexedDB)
+      clearChecklists: (): void => {
+        localStorage.removeItem(CHECKLISTS_KEY);
       }
 
     };

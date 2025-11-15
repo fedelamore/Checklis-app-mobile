@@ -7,6 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { SyncStatusBadge } from "@/components/SyncStatusBadge";
+import { apiClient } from "@/services/api-client";
+import { createFormResponse, saveFieldResponse, getFormResponseById } from "@/services/db/checklists-db";
 
 type CampoTipo =
   | "texto_simples"
@@ -64,8 +67,9 @@ export function ChecklistForm() {
   const [submitting, setSubmitting] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [localResponseId, setLocalResponseId] = useState<number | null>(null);
 
-  // ---------- BUSCA OS CAMPOS NA API ----------
+  // ---------- BUSCA OS CAMPOS NA API (COM SUPORTE OFFLINE) ----------
   useEffect(() => {
     if (!id) return;
 
@@ -75,78 +79,124 @@ export function ChecklistForm() {
         setError(null);
 
         const currentUserStr = localStorage.getItem('current_user');
-        
+
         if (!currentUserStr) {
           toast.error('Usuário não encontrado. Faça login novamente.');
           navigate('/login');
           return;
         }
-        
+
         const currentUser = JSON.parse(currentUserStr);
         const token = currentUser?.authorization?.token;
-  
+
         if (!token) {
           toast.error('Token não encontrado. Faça login novamente.');
           navigate('/login');
           return;
         }
 
-        const res = await fetch(`${API_URL}/checklist/${id}`, {
-          method: "GET", 
-          headers: {
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "Authorization": `Bearer ${token}`, 
-            "X-Requested-With": "XMLHttpRequest", 
-          },
-        });
-        if (!res.ok) throw new Error("Erro ao buscar checklist");
-
-        const data: { data: ChecklistData } = await res.json();
-        console.log("data: ", data);
+        // Usa o API Client que tem fallback offline
+        const data: { data: ChecklistData } = await apiClient.getChecklist(Number(id));
+        console.log("[ChecklistForm] data: ", data);
 
         setTitulo(data.data.titulo || "Checklist");
         setCampos(data.data.campos || []);
         setChecklistResposta(data.data.resposta);
-        console.log("checklistResposta: ", checklistResposta)
+
+        // Verifica se já existe uma resposta local para este checklist
+        const { getFormResponsesByChecklistId, getFieldResponsesByResponseId, getFormResponseByServerResponseId } = await import("@/services/db/checklists-db");
+
+        // Tenta encontrar resposta existente de 3 formas:
+        // 1. Por checklistId local (URL param)
+        let existingResponses = await getFormResponsesByChecklistId(Number(id));
+        console.log("[ChecklistForm] Existing responses by checklistId:", existingResponses);
+
+        // 2. Se não encontrou e tem resposta do servidor, busca por serverResponseId
+        if (existingResponses.length === 0 && data.data.resposta && 'id' in data.data.resposta) {
+          const serverResponseId = (data.data.resposta as any).id;
+          const byServerResponse = await getFormResponseByServerResponseId(serverResponseId);
+          if (byServerResponse) {
+            existingResponses = [byServerResponse];
+            console.log("[ChecklistForm] Found response by serverResponseId:", serverResponseId);
+          }
+        }
+
+        let responseId: number;
+        if (existingResponses.length > 0) {
+          // Usa a resposta existente (a mais recente)
+          responseId = existingResponses[existingResponses.length - 1].id!;
+          console.log("[ChecklistForm] Using existing local response:", responseId);
+        } else {
+          // Cria uma nova resposta local no IndexedDB
+          // Pega o serverResponseId se existir em data.data.resposta
+          const serverResponseId = (data.data.resposta && 'id' in data.data.resposta)
+            ? (data.data.resposta as any).id
+            : undefined;
+
+          responseId = await createFormResponse(
+            Number(id),
+            data.data.id,
+            serverResponseId
+          );
+          console.log("[ChecklistForm] Created new local response:", responseId, "with serverResponseId:", serverResponseId);
+        }
+
+        setLocalResponseId(responseId);
+
+        // Carrega valores salvos localmente no IndexedDB
+        const localFieldResponses = await getFieldResponsesByResponseId(responseId);
+        console.log("[ChecklistForm] Local field responses:", localFieldResponses);
+
+        // Cria mapa com valores salvos localmente
+        // IMPORTANTE: Usa string como chave, igual ao getCampoKey()
+        const localValuesMap = new Map<string, any>();
+        localFieldResponses.forEach(field => {
+          localValuesMap.set(String(field.fieldId), field.valor);
+        });
+
+        // Também carrega valores do servidor (se houver)
         const savedValues = data.data.respostasSalvas;
-        const savedValuesMap = new Map<number, any>();
+        const serverValuesMap = new Map<string, any>();
         if (savedValues && Object.keys(savedValues).length > 0) {
           Object.values(savedValues).forEach(resposta => {
             console.log("resposta: ", resposta)
             if (resposta.id_campo) {
-              savedValuesMap.set(resposta.id_campo, resposta.valor.valor);
+              serverValuesMap.set(String(resposta.id_campo), resposta.valor.valor);
             }
           });
         }
 
-        console.log("savedValuesMap: ", savedValuesMap)
-        // inicializa valores
+        console.log("localValuesMap: ", localValuesMap)
+        console.log("serverValuesMap: ", serverValuesMap)
+
+        // inicializa valores (prioridade para valores locais)
         const init: FormValues = {};
         (data.data.campos || []).forEach((campo, index) => {
           const key = getCampoKey(campo, index);
 
           console.log("campo: ", campo)
-          const savedValue = campo.id ? savedValuesMap.get(campo.id) : undefined;
-          console.log("savedValue: ", savedValue)
+          // Prioriza valor local, depois servidor, depois valor padrão
+          // IMPORTANTE: usa key (string) para buscar no mapa
+          const localValue = localValuesMap.get(key);
+          const serverValue = serverValuesMap.get(key);
+          const savedValue = localValue ?? serverValue;
+
+          console.log("key:", key, "savedValue: ", savedValue)
           init[key] = savedValue ?? (campo.tipo === "select_multiplo" ? [] : "");
         });
         console.log("init: ", init)
         setFormValues(init);
       } catch (err: any) {
         setError(err.message || "Erro inesperado");
+        toast.error(err.message || "Erro ao carregar checklist");
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [id]);
+  }, [id, navigate]);
 
-  //salvar resposta por campo
-  function salvarCampo() {
-
-  }
 
   // chave única para cada campo
   function getCampoKey(campo: Campo, index: number) {
@@ -286,56 +336,45 @@ export function ChecklistForm() {
 
     setFormValues((prev) => ({ ...prev, [key]: e.target.value }));
 
-    console.log("campo!: ", campo)
-    console.log("index!: ", index)
-    console.log("e!: ", e)
-    sendValueCampo(e.target.value, campo, checklistResposta)
+    // Salva o campo usando o API Client (offline-first)
+    sendValueCampo(e.target.value, campo, checklistResposta);
   }
 
-  async function sendValueCampo(valor, campo, resposta) {
+  async function sendValueCampo(valor: any, campo: Campo, resposta: any) {
     try {
-      const currentUserStr = localStorage.getItem('current_user');
-      if (!currentUserStr) {
-        toast.error('Usuário não encontrado. Faça login novamente.');
-        navigate('/login');
-        return;
+      console.log("ENTROU")
+      if (!localResponseId || !campo.id) return;
+      console.log("DOIS")
+      // Salva localmente  primeiro (sempre)
+      await saveFieldResponse(
+        localResponseId,
+        campo.id,
+        valor,
+        campo.id,
+        resposta?.id
+      );
+
+      console.log("[ChecklistForm] Field saved locally:", campo.id, valor);
+
+      // Tenta sincronizar online (o API Client cuida disso)
+      if (resposta?.id) {
+        try {
+          await apiClient.saveField(
+            valor,
+            campo.id,
+            resposta.id,
+            localResponseId
+          );
+          console.log("[ChecklistForm] Field synced online:", campo.id);
+        } catch (error) {
+          // Erro online não é crítico - já está salvo localmente
+          console.warn("[ChecklistForm] Field not synced (offline or error):", error);
+        }
       }
-
-      const currentUser = JSON.parse(currentUserStr);
-      const token = currentUser?.authorization?.token;
-
-      const res = await fetch(`${API_URL}/salvar_campo`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json', 
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${token}`, 
-          'X-Requested-With': 'XMLHttpRequest'
-        },
-        body: JSON.stringify({ 
-          valor: valor,
-          id_campo: campo.id,
-          id_resposta: resposta.id,
-          web: 0
-        }),
-      });
-
-      console.log('[auth] HTTP status', res.status);
-    
-      if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          console.error('[auth] login error body', err);
-          throw new Error(err?.message || 'Erro ao autenticar');
-      }
-
-      const data = (await res.json());
-      console.log('sendValueCampo', data);
-      return data;
     } catch (error) {
-        console.error('[auth] loginRequest caught', error);
-        throw error;
-      }
+      console.error('[ChecklistForm] Error saving field:', error);
     }
+  }
 
   function handleFileChange(
     campo: Campo,
@@ -364,7 +403,7 @@ export function ChecklistForm() {
     }
   }
 
-  // ---------- SUBMIT ----------
+  // ---------- SUBMIT (COM SUPORTE OFFLINE) ----------
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting) return;
@@ -376,7 +415,7 @@ export function ChecklistForm() {
 
     setSubmitting(true);
     try {
-      console.log("Valores do formulário:", formValues);
+      console.log("[ChecklistForm] Submitting form values:", formValues);
 
       const currentUserStr = localStorage.getItem('current_user');
       if (!currentUserStr || !checklistResposta || !('id' in checklistResposta)) {
@@ -394,22 +433,25 @@ export function ChecklistForm() {
         return;
       }
 
-      const response = await fetch(`${API_URL}/checklist/${id}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          id_resposta: checklistResposta.id
-        })
-      });
+      // Usa o API Client que tem suporte offline
+      const result = await apiClient.submitForm(
+        Number(id),
+        (checklistResposta as any).id,
+        localResponseId || undefined
+      );
 
-      toast.success("Checklist enviado com sucesso!");
+      if (result.offline) {
+        toast.success("Checklist salvo localmente! Será sincronizado quando estiver online.");
+      } else {
+        toast.success("Checklist enviado com sucesso!");
+      }
+
       navigate("/checklists");
     } catch (err: any) {
-      console.error(err);
-      toast.error("Ocorreu um erro ao salvar o checklist.");
+      console.error("[ChecklistForm] Error submitting form:", err);
+      // Mesmo com erro, pode estar salvo localmente
+      toast.warning("Checklist salvo localmente. Verifique sua conexão.");
+      navigate("/checklists");
     } finally {
       setSubmitting(false);
     }
@@ -670,7 +712,8 @@ export function ChecklistForm() {
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <h1 className="text-xl font-bold">{titulo}</h1>
+        <h1 className="text-xl font-bold flex-1">{titulo}</h1>
+        <SyncStatusBadge showDetails={false} />
       </header>
 
       <div className="p-4">

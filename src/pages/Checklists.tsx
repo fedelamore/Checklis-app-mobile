@@ -17,6 +17,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
+import { apiClient } from '@/services/api-client';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -55,26 +56,47 @@ const Checklists = () => {
         return;
       }
 
-      const response = await fetch(`${API_URL}/checklists`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      try {
+        const response = await fetch(`${API_URL}/checklists`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        });
 
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error?.message || 'Erro ao carregar checklists');
-      }
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
 
-      const result: ChecklistApiResponse = await response.json();
+        const result: ChecklistApiResponse = await response.json();
 
-      if (result.success && result.data?.data) {
-        setChecklists(result.data.data);
-      } else {
-        toast.error('Erro ao processar dados dos checklists');
+        if (result.success && result.data?.data) {
+          setChecklists(result.data.data);
+
+          // Salva a lista no localStorage para fallback offline
+          storage.overwriteChecklists(result.data.data);
+
+          // Download automático dos checklists em andamento para uso offline
+          apiClient.downloadInProgressChecklistsForOffline(result.data.data).catch(err => {
+            console.warn('[Checklists] Error auto-downloading checklists:', err);
+          });
+        } else {
+          toast.error('Erro ao processar dados dos checklists');
+        }
+      } catch (fetchError) {
+        console.warn('[Checklists] API fetch failed, trying local storage:', fetchError);
+
+        // Tenta buscar do localStorage (fallback offline)
+        const cachedChecklists = storage.getChecklists();
+        if (cachedChecklists && cachedChecklists.length > 0) {
+          console.log('[Checklists] Using cached checklists from localStorage');
+          setChecklists(cachedChecklists);
+          toast.info('Mostrando dados offline');
+        } else {
+          throw new Error('Sem conexão e sem dados offline disponíveis');
+        }
       }
     } catch (error) {
       console.error('Erro ao carregar checklists:', error);

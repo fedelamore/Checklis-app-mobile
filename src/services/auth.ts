@@ -1,6 +1,5 @@
 // src/services/auth.ts
 const API_URL = import.meta.env.VITE_API_URL || 'https://sua-api.com';
-
 export type LoginResponse = {
   token: string;
   user: {
@@ -11,8 +10,10 @@ export type LoginResponse = {
 };
 
     export async function loginRequest(email: string, password: string): Promise<LoginResponse> {
+      console.log("API_URL: ", API_URL)
       console.log('[auth] loginRequest called', { email });          // não logue senhas em produção
-        try {
+      
+      try {
           const res = await fetch(`${API_URL}/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json'},
