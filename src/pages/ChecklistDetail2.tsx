@@ -10,6 +10,8 @@ import { Progress } from "@/components/ui/progress";
 import { SyncStatusBadge } from "@/components/SyncStatusBadge";
 import { apiClient } from "@/services/api-client";
 import { createFormResponse, saveFieldResponse, getFormResponseById } from "@/services/db/checklists-db";
+import { Camera as CapacitorCamera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Capacitor } from '@capacitor/core';
 
 type CampoTipo =
   | "texto_simples"
@@ -215,37 +217,95 @@ export function ChecklistForm() {
     console.log('[openCamera] Iniciando abertura da câmera para key:', key);
 
     try {
-      // Verifica se a API está disponível
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        console.error('[openCamera] API getUserMedia não disponível');
-        toast.error('Seu navegador não suporta acesso à câmera');
-        return;
-      }
+      // Verifica se está rodando em plataforma nativa (Android/iOS)
+      const isNative = Capacitor.isNativePlatform();
+      console.log('[openCamera] Is native platform:', isNative);
 
-      console.log('[openCamera] Solicitando permissão de câmera...');
+      if (isNative) {
+        // Usa o plugin nativo do Capacitor
+        console.log('[openCamera] Usando Capacitor Camera (nativo)');
 
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' }, // câmera traseira
-        audio: false
-      });
+        const image = await CapacitorCamera.getPhoto({
+          quality: 80,
+          allowEditing: false,
+          resultType: CameraResultType.DataUrl,
+          source: CameraSource.Camera,
+        });
 
-      console.log('[openCamera] Permissão concedida! Stream:', mediaStream);
+        console.log('[openCamera] Foto capturada via Capacitor');
 
-      setStream(mediaStream);
-      setCurrentCameraKey(key);
-      setIsCameraOpen(true);
-
-      console.log('[openCamera] Estados atualizados, aguardando videoRef...');
-
-      // Aguarda o videoRef estar disponível
-      setTimeout(() => {
-        if (videoRef.current) {
-          console.log('[openCamera] VideoRef disponível, atribuindo stream');
-          videoRef.current.srcObject = mediaStream;
-        } else {
-          console.error('[openCamera] VideoRef não disponível após timeout');
+        // Processa a foto capturada
+        const imageDataUrl = image.dataUrl;
+        if (!imageDataUrl) {
+          toast.error('Erro ao capturar foto');
+          return;
         }
-      }, 100);
+
+        // Verifica se é campo de leitura automática
+        const campoIndex = campos.findIndex((c, idx) => getCampoKey(c, idx) === key);
+        const campo = campos[campoIndex];
+
+        if (!campo) {
+          console.error('[openCamera] Campo não encontrado');
+          return;
+        }
+
+        let valorParaSalvar: any;
+
+        if (campo.tipo === 'leitura_automatica') {
+          // Para leitura automática, mantém o objeto com foto e ocrTexto
+          const valorAtual = formValues[key] || {};
+          valorParaSalvar = { ...valorAtual, foto: imageDataUrl };
+
+          setFormValues((prev) => ({
+            ...prev,
+            [key]: valorParaSalvar,
+          }));
+        } else {
+          // Para foto simples, salva apenas a string base64
+          valorParaSalvar = imageDataUrl;
+
+          setFormValues((prev) => ({
+            ...prev,
+            [key]: imageDataUrl,
+          }));
+        }
+
+        // Salva offline e online usando a mesma função dos campos de texto
+        await sendValueCampo(valorParaSalvar, campo, checklistResposta);
+        toast.success('Foto capturada e salva com sucesso!');
+
+      } else {
+        // Usa a API web do navegador (fallback para web)
+        console.log('[openCamera] Usando getUserMedia (web)');
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          console.error('[openCamera] API getUserMedia não disponível');
+          toast.error('Seu navegador não suporta acesso à câmera');
+          return;
+        }
+
+        const mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+          audio: false
+        });
+
+        console.log('[openCamera] Permissão concedida! Stream:', mediaStream);
+
+        setStream(mediaStream);
+        setCurrentCameraKey(key);
+        setIsCameraOpen(true);
+
+        // Aguarda o videoRef estar disponível
+        setTimeout(() => {
+          if (videoRef.current) {
+            console.log('[openCamera] VideoRef disponível, atribuindo stream');
+            videoRef.current.srcObject = mediaStream;
+          } else {
+            console.error('[openCamera] VideoRef não disponível após timeout');
+          }
+        }, 100);
+      }
     } catch (error: any) {
       console.error('[openCamera] Erro ao acessar câmera:', error);
       console.error('[openCamera] Error name:', error.name);
@@ -253,8 +313,8 @@ export function ChecklistForm() {
 
       let errorMessage = 'Não foi possível acessar a câmera.';
 
-      if (error.name === 'NotAllowedError') {
-        errorMessage = 'Permissão de câmera negada. Permita o acesso nas configurações do navegador.';
+      if (error.name === 'NotAllowedError' || error.message?.includes('denied')) {
+        errorMessage = 'Permissão de câmera negada. Permita o acesso nas configurações do app.';
       } else if (error.name === 'NotFoundError') {
         errorMessage = 'Nenhuma câmera encontrada no dispositivo.';
       } else if (error.name === 'NotReadableError') {
