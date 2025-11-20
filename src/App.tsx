@@ -14,12 +14,21 @@ import NotFound from "./pages/NotFound";
 import { useOnlineStatus } from "./hooks/useOnlineStatus";
 import { debugDatabaseSchema } from "./services/db";
 import { useEffect } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const queryClient = new QueryClient();
 
 const AppContent = () => {
   // Inicializa o hook de status online (que também gerencia sincronização automática)
-  useOnlineStatus();
+  const { showSyncModal, confirmSync, cancelSync } = useOnlineStatus();
 
   // Debug do schema do banco na inicialização
   useEffect(() => {
@@ -42,18 +51,34 @@ const AppContent = () => {
   }, []);
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/" element={<Home />} />
-        <Route path="/checklists" element={<Checklists />} />
-        <Route path="/criar-checklist" element={<CreateChecklist />} />
-        <Route path="/editar-checklist/:id" element={<EditChecklist />} />
-        <Route path="/checklist/:id" element={<ChecklistDetail />} />
-        <Route path="/perfil" element={<Profile />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </BrowserRouter>
+    <>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<Home />} />
+          <Route path="/checklists" element={<Checklists />} />
+          <Route path="/criar-checklist" element={<CreateChecklist />} />
+          <Route path="/editar-checklist/:id" element={<EditChecklist />} />
+          <Route path="/checklist/:id" element={<ChecklistDetail />} />
+          <Route path="/perfil" element={<Profile />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </BrowserRouter>
+
+      <AlertDialog open={showSyncModal} onOpenChange={cancelSync}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sincronizar dados</AlertDialogTitle>
+            <AlertDialogDescription>
+              Há checklists pendentes de sincronização. Clique em OK para sincronizar agora.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={confirmSync}>OK</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 };
 

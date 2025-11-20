@@ -7,18 +7,23 @@ import {
   saveFieldResponse,
   updateFormResponse,
   getFormResponseById,
+  getFormResponsesByChecklistId,
 } from './db/checklists-db';
 import { addToSyncQueue } from './db/sync-queue';
+import { Preferences } from '@capacitor/preferences';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
 // Helper para pegar token de autenticação
-const getAuthToken = (): string | null => {
+const getAuthToken = async (): Promise<string | null> => {
   try {
-    const userStr = localStorage.getItem('current_user');
+    /*const userStr = localStorage.getItem('current_user');
     if (!userStr) return null;
     const user = JSON.parse(userStr);
-    return user?.authorization?.token || null;
+    return user?.authorization?.token || null;*/
+    const { value } = await Preferences.get({ key: 'token' });
+    const token = value;
+    return token;
   } catch {
     return null;
   }
@@ -39,7 +44,7 @@ const checkOnlineStatus = async (): Promise<boolean> => {
 export const apiClient = {
   // Baixar automaticamente checklists em andamento para uso offline
   async downloadInProgressChecklistsForOffline(checklistsData: any[]) {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     if (!token) {
       console.warn('[apiClient] No token available for offline download');
       return;
@@ -102,7 +107,7 @@ export const apiClient = {
   // Buscar checklist por ID
   async getChecklist(id: number, forceOnline = false) {
     const isOnline = await checkOnlineStatus();
-    const token = getAuthToken();
+    const token = await getAuthToken();
 
     console.log(`[apiClient] getChecklist(${id}) - Online: ${isOnline}`);
 
@@ -160,12 +165,19 @@ export const apiClient = {
         // Se falhou mas tem cache, usa o cache como fallback
         if (cached) {
           console.log('[apiClient] API failed, using cached checklist as fallback');
+
+          // Busca o serverResponseId da formResponse local
+          const formResponses = await getFormResponsesByChecklistId(id);
+          const serverResponseId = formResponses.length > 0
+            ? formResponses[formResponses.length - 1].serverResponseId
+            : undefined;
+
           return {
             data: {
               id: cached.serverId,
               titulo: cached.titulo,
               campos: cached.campos,
-              resposta: {},
+              resposta: serverResponseId ? { id: serverResponseId } : {},
               respostasSalvas: {},
             },
           };
@@ -180,12 +192,19 @@ export const apiClient = {
     // Se está offline, usa o cache
     if (cached) {
       console.log('[apiClient] Offline mode: using cached checklist');
+
+      // Busca o serverResponseId da formResponse local
+      const formResponses = await getFormResponsesByChecklistId(id);
+      const serverResponseId = formResponses.length > 0
+        ? formResponses[formResponses.length - 1].serverResponseId
+        : undefined;
+
       return {
         data: {
           id: cached.serverId,
           titulo: cached.titulo,
           campos: cached.campos,
-          resposta: {},
+          resposta: serverResponseId ? { id: serverResponseId } : {},
           respostasSalvas: {},
         },
       };
@@ -199,7 +218,7 @@ export const apiClient = {
   // Salvar campo individual
   async saveField(valor: any, id_campo: number, id_resposta: number, localResponseId?: number) {
     const isOnline = await checkOnlineStatus();
-    const token = getAuthToken();
+    const token = await getAuthToken();
 
     if (!token) {
       throw new Error('Token não encontrado. Faça login novamente.');
@@ -260,7 +279,7 @@ export const apiClient = {
   // Submeter formulário completo
   async submitForm(checklistId: number, id_resposta: number, localResponseId?: number) {
     const isOnline = await checkOnlineStatus();
-    const token = getAuthToken();
+    const token = await getAuthToken();
 
     if (!token) {
       throw new Error('Token não encontrado. Faça login novamente.');

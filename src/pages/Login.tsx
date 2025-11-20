@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { storage } from '@/utils/storage';
 import { loginRequest } from '@/services/auth';
+import { Preferences } from '@capacitor/preferences';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -22,12 +23,22 @@ const Login = () => {
     try {
       const { authorization, user } = await loginRequest(email, password);
 
+      await Preferences.set({
+        key: 'token',
+        value: authorization.token,
+      });
+
+      // Debug - verificar se salvou
+      const { value } = await Preferences.get({ key: 'token' });
+      const token = value;
+      console.log('[Login] Token salvo:', value);
+
       // sucesso
       storage.setUser({
         id: user.id,
         name: user.name,
         email: user.email,
-        authorization,
+        //authorization,
       });
 
       navigate('/');

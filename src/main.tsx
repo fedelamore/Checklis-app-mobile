@@ -8,7 +8,6 @@ import { db } from "./services/db";
 // Debug: Verificar versão do banco ao iniciar
 db.open().then(() => {
   console.log('[DB] Database opened successfully');
-  console.log('[DB] Current version:', db.verno);
 }).catch(error => {
   console.error('[DB] Error opening database:', error);
   // Se houver erro de schema, força recriação

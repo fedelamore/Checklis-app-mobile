@@ -1,9 +1,38 @@
 import { useState, useEffect } from 'react';
 import { Network } from '@capacitor/network';
 import { syncManager } from '@/services/sync-manager';
+import { getSyncQueueStats } from '@/services/db/sync-queue';
+import { getUnsyncedFieldResponses } from '@/services/db/checklists-db';
 
 export const useOnlineStatus = () => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [hasPendingItems, setHasPendingItems] = useState(false);
+
+  // Verifica se há itens pendentes para sincronizar
+  const checkPendingItems = async (): Promise<boolean> => {
+    try {
+      const stats = await getSyncQueueStats();
+      const unsyncedFields = await getUnsyncedFieldResponses();
+      const hasPending = stats.pending > 0 || unsyncedFields.length > 0;
+      setHasPendingItems(hasPending);
+      return hasPending;
+    } catch (error) {
+      console.error('[useOnlineStatus] Error checking pending items:', error);
+      return false;
+    }
+  };
+
+  // Função para confirmar sincronização do modal
+  const confirmSync = async () => {
+    setShowSyncModal(false);
+    await syncManager.syncAll();
+  };
+
+  // Função para cancelar o modal
+  const cancelSync = () => {
+    setShowSyncModal(false);
+  };
 
   useEffect(() => {
     // Verifica status inicial
@@ -34,12 +63,17 @@ export const useOnlineStatus = () => {
           previousOnlineState = isNowOnline;
           setIsOnline(isNowOnline);
 
-          // Se estava offline e agora está online, inicia sincronização automática
+          // Se estava offline e agora está online, verifica pendentes e mostra modal
           if (wasOffline && isNowOnline) {
-            console.log('[useOnlineStatus] Back online, starting sync...');
-            setTimeout(() => {
-              console.log('[useOnlineStatus] Triggering syncAll...');
-              syncManager.syncAll();
+            console.log('[useOnlineStatus] Back online, checking pending items...');
+            setTimeout(async () => {
+              const hasPending = await checkPendingItems();
+              if (hasPending) {
+                console.log('[useOnlineStatus] Has pending items, showing modal...');
+                setShowSyncModal(true);
+              } else {
+                console.log('[useOnlineStatus] No pending items');
+              }
             }, 1000); // Aguarda 1 segundo para estabilizar conexão
           }
         });
@@ -57,12 +91,17 @@ export const useOnlineStatus = () => {
       previousOnlineState = true;
       setIsOnline(true);
 
-      // Inicia sincronização quando volta online
+      // Verifica pendentes quando volta online
       if (wasOffline) {
-        console.log('[useOnlineStatus] Was offline, now online - starting sync...');
-        setTimeout(() => {
-          console.log('[useOnlineStatus] Triggering syncAll...');
-          syncManager.syncAll();
+        console.log('[useOnlineStatus] Was offline, now online - checking pending items...');
+        setTimeout(async () => {
+          const hasPending = await checkPendingItems();
+          if (hasPending) {
+            console.log('[useOnlineStatus] Has pending items, showing modal...');
+            setShowSyncModal(true);
+          } else {
+            console.log('[useOnlineStatus] No pending items');
+          }
         }, 1000);
       }
     };
@@ -86,5 +125,11 @@ export const useOnlineStatus = () => {
     };
   }, []);
 
-  return isOnline;
+  return {
+    isOnline,
+    showSyncModal,
+    hasPendingItems,
+    confirmSync,
+    cancelSync,
+  };
 };

@@ -118,13 +118,10 @@ export const saveFieldResponse = async (
     .where('responseId')
     .equals(responseId)
     .toArray();
-  console.log("allFieldsForResponse: ", allFieldsForResponse)
   const existing = allFieldsForResponse.find(f => f.fieldId === fieldId);
 
-  console.log("existing: ", existing)
   if (existing) {
     // Atualiza existente
-    console.log("if")
     await db.fieldResponses.update(existing.id!, {
       valor,
       syncStatus: 'local_only',
@@ -133,7 +130,6 @@ export const saveFieldResponse = async (
     return existing.id!;
   } else {
     // Cria novo
-    console.log("else")
     const id = await db.fieldResponses.add({
       responseId,
       fieldId,
@@ -215,4 +211,16 @@ export const deleteFormResponseAndFields = async (responseId: number): Promise<v
 
   // Deleta a resposta
   await db.formResponses.delete(responseId);
+};
+
+export const deleteFieldResponse = async (id: number): Promise<void> => {
+  await db.fieldResponses.delete(id);
+};
+
+// Deleta um checklist do cache local
+export const deleteChecklistFromCache = async (serverId: number): Promise<void> => {
+  const checklist = await getChecklistByServerId(serverId);
+  if (checklist && checklist.id) {
+    await db.checklists.delete(checklist.id);
+  }
 };

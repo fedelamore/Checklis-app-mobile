@@ -107,17 +107,11 @@ export const getDatabaseStats = async () => {
 // Debug: verifica se o compound index existe
 export const debugDatabaseSchema = async () => {
   try {
-    console.log('[DB Debug] Database version:', db.verno);
-    console.log('[DB Debug] Database name:', db.name);
-
     // Tenta usar o compound index
     const testQuery = db.fieldResponses.where('[responseId+fieldId]');
-    console.log('[DB Debug] Compound index [responseId+fieldId] exists:', !!testQuery);
 
     // Lista todos os índices da tabela fieldResponses
     const schema = db.table('fieldResponses').schema;
-    console.log('[DB Debug] fieldResponses indexes:', schema.indexes.map(idx => idx.name));
-    console.log('[DB Debug] fieldResponses primKey:', schema.primKey.name);
 
     return {
       version: db.verno,
@@ -133,9 +127,7 @@ export const debugDatabaseSchema = async () => {
 // Força a recriação do banco deletando e recriando (use apenas para debug/troubleshooting)
 export const recreateDatabase = async () => {
   try {
-    console.log('[DB] Deleting database...');
     await db.delete();
-    console.log('[DB] Database deleted, reloading page to recreate...');
     window.location.reload();
   } catch (error) {
     console.error('[DB] Error recreating database:', error);

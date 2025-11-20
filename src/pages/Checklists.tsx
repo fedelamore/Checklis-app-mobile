@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { apiClient } from '@/services/api-client';
+import { Preferences } from '@capacitor/preferences';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -39,17 +40,18 @@ const Checklists = () => {
 
   const loadChecklists = async () => {
     try {
-      const currentUserStr = localStorage.getItem('current_user');
+      //const currentUserStr = localStorage.getItem('current_user');
+      const { value } = await Preferences.get({ key: 'token' });
+      const token = value;
 
-      if (!currentUserStr) {
+      /*if (!currentUserStr) {
         toast.error('Usuário não encontrado. Faça login novamente.');
         navigate('/login');
         return;
       }
 
       const currentUser = JSON.parse(currentUserStr);
-      const token = currentUser?.authorization?.token;
-
+      const token = currentUser?.authorization?.token;*/
       if (!token) {
         toast.error('Token não encontrado. Faça login novamente.');
         navigate('/login');

@@ -12,6 +12,7 @@ import { apiClient } from "@/services/api-client";
 import { createFormResponse, saveFieldResponse, getFormResponseById } from "@/services/db/checklists-db";
 import { Camera as CapacitorCamera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
+import { Preferences } from '@capacitor/preferences';
 
 type CampoTipo =
   | "texto_simples"
@@ -70,6 +71,7 @@ export function ChecklistForm() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [localResponseId, setLocalResponseId] = useState<number | null>(null);
+  const [serverResponseId, setServerResponseId] = useState<number | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [currentCameraKey, setCurrentCameraKey] = useState<string | null>(null);
@@ -84,7 +86,9 @@ export function ChecklistForm() {
         setLoading(true);
         setError(null);
 
-        const currentUserStr = localStorage.getItem('current_user');
+        const { value } = await Preferences.get({ key: 'token' });
+        const token = value;
+        /*const currentUserStr = localStorage.getItem('current_user');
 
         if (!currentUserStr) {
           toast.error('Usuário não encontrado. Faça login novamente.');
@@ -93,7 +97,7 @@ export function ChecklistForm() {
         }
 
         const currentUser = JSON.parse(currentUserStr);
-        const token = currentUser?.authorization?.token;
+        const token = currentUser?.authorization?.token;*/
 
         if (!token) {
           toast.error('Token não encontrado. Faça login novamente.');
@@ -109,7 +113,6 @@ export function ChecklistForm() {
         setCampos(data.data.campos || []);
         setChecklistResposta(data.data.resposta);
 
-        console.log("[ChecklistForm] data.data.resposta:", data.data.resposta);
         console.log("[ChecklistForm] data.data.id:", data.data.id);
 
         // Verifica se já existe uma resposta local para este checklist
@@ -118,7 +121,7 @@ export function ChecklistForm() {
         // Tenta encontrar resposta existente de 3 formas:
         // 1. Por checklistId local (URL param)
         let existingResponses = await getFormResponsesByChecklistId(Number(id));
-        console.log("[ChecklistForm] Existing responses by checklistId:", existingResponses);
+        console.log("[ChecklistForm] Existing responses by checklistId:");
 
         // 2. Se não encontrou e tem resposta do servidor, busca por serverResponseId
         if (existingResponses.length === 0 && data.data.resposta && typeof data.data.resposta === 'object' && 'id' in data.data.resposta) {
@@ -151,9 +154,18 @@ export function ChecklistForm() {
             serverResponseId
           );
           console.log("[ChecklistForm] Created new local response:", responseId, "with serverResponseId:", serverResponseId);
+          setServerResponseId(serverResponseId);
         }
 
         setLocalResponseId(responseId);
+
+        // Se já existia uma resposta, pega o serverResponseId dela
+        if (existingResponses.length > 0) {
+          const existingServerResponseId = existingResponses[existingResponses.length - 1].serverResponseId;
+          if (existingServerResponseId) {
+            setServerResponseId(existingServerResponseId);
+          }
+        }
 
         // Carrega valores salvos localmente no IndexedDB
         const localFieldResponses = await getFieldResponsesByResponseId(responseId);
@@ -464,8 +476,22 @@ export function ChecklistForm() {
   const stopDrawing = (key: string) => {
     setIsDrawing(false);
     const canvas = canvasRef.current;
+    console.log("canvasRef: ", canvasRef)
+    console.log("canvas: ", canvas)
     if (canvas) {
-      setFormValues((prev) => ({ ...prev, [key]: canvas.toDataURL() }));
+      const dataUrl = canvas.toDataURL();
+      setFormValues((prev) => ({ ...prev, [key]: dataUrl }));
+
+      // Encontra o campo correspondente e salva
+      const campoIndex = campos.findIndex((c, idx) => getCampoKey(c, idx) === key);
+      console.log("campoIndex")
+
+      if (campoIndex !== -1) {
+        const campo = campos[campoIndex];
+        console.log("stopDrawing123")
+        console.log(dataUrl, campo, checklistResposta)
+        sendValueCampo(dataUrl, campo, checklistResposta);
+      }
     }
   };
 
@@ -645,7 +671,9 @@ export function ChecklistForm() {
     try {
       console.log("[ChecklistForm] Submitting form values:", formValues);
 
-      const currentUserStr = localStorage.getItem('current_user');
+      const { value } = await Preferences.get({ key: 'token' });
+      const token = value;
+      /*const currentUserStr = localStorage.getItem('current_user');
       if (!currentUserStr || !checklistResposta || !('id' in checklistResposta)) {
         toast.error('Usuário não encontrado. Faça login novamente.');
         navigate('/login');
@@ -653,7 +681,7 @@ export function ChecklistForm() {
       }
 
       const currentUser = JSON.parse(currentUserStr);
-      const token = currentUser?.authorization?.token;
+      const token = currentUser?.authorization?.token;*/
 
       if (!token) {
         toast.error('Token não encontrado. Faça login novamente.');
@@ -787,6 +815,7 @@ export function ChecklistForm() {
                   [key]: { ...(prev[key] || {}), ocrTexto: e.target.value },
                 }))
               }
+              onBlur={() => handleBlur(campo, index)}
             />
           </div>
         );

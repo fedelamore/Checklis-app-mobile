@@ -1,7 +1,10 @@
 // src/services/auth.ts
 const API_URL = import.meta.env.VITE_API_URL || 'https://sua-api.com';
+
 export type LoginResponse = {
-  token: string;
+  authorization: {
+    token: string;
+  };
   user: {
     id: string;
     name: string;
@@ -11,7 +14,8 @@ export type LoginResponse = {
 
     export async function loginRequest(email: string, password: string): Promise<LoginResponse> {
       console.log("API_URL: ", API_URL)
-      console.log('[auth] loginRequest called', { email });          // não logue senhas em produção
+      console.log('[auth] loginRequest called', { email });    
+      // não logue senhas em produção
       
       try {
           const res = await fetch(`${API_URL}/login`, {
@@ -20,9 +24,9 @@ export type LoginResponse = {
             body: JSON.stringify({ email, password }),
           });
 
-      console.log('[auth] HTTP status', res.status);
+          console.log('[auth] HTTP status', res.status);
 
-       if (!res.ok) {
+          if (!res.ok) {
             const err = await res.json().catch(() => ({}));
             console.error('[auth] login error body', err);
             throw new Error(err?.message || 'Erro ao autenticar');

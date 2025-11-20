@@ -9,6 +9,7 @@ import { getUnsyncedFormResponses } from '@/services/db/checklists-db';
 import { FormResponseDB } from '@/services/db';
 import { syncManager } from '@/services/sync-manager';
 import { toast } from 'sonner';
+import { Preferences } from '@capacitor/preferences';
 
 const Home = () => {
   const [pendingResponses, setPendingResponses] = useState<FormResponseDB[]>([]);
@@ -17,6 +18,7 @@ const Home = () => {
 
   useEffect(() => {
     const user = storage.getUser();
+    
     if (!user) {
       navigate('/login');
       return;

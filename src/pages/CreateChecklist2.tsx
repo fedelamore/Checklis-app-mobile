@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { Preferences } from '@capacitor/preferences';
 
 const CreateChecklist = () => {
   const navigate = useNavigate();
@@ -22,6 +23,8 @@ const CreateChecklist = () => {
 
   async function loadForms() {
     try {
+      const { value } = await Preferences.get({ key: 'token' });
+      const token = value;
       const currentUserStr = localStorage.getItem('current_user');
       if (!currentUserStr) {
         toast.error('Usuário não encontrado. Faça login novamente.');
@@ -30,7 +33,7 @@ const CreateChecklist = () => {
       }
 
       const currentUser = JSON.parse(currentUserStr);
-      const token = currentUser?.authorization?.token;
+      //const token = currentUser?.authorization?.token;
 
       const response = await fetch(`${API_URL}/gerar_checklist`, {
         method: 'GET',
@@ -75,6 +78,9 @@ const CreateChecklist = () => {
     setSubmitting(true);
 
     try {
+      const { value } = await Preferences.get({ key: 'token' });
+      const token = value;
+      
       const currentUserStr = localStorage.getItem('current_user');
       if (!currentUserStr) {
         toast.error('Usuário não encontrado. Faça login novamente.');
@@ -83,7 +89,7 @@ const CreateChecklist = () => {
       }
 
       const currentUser = JSON.parse(currentUserStr);
-      const token = currentUser?.authorization?.token;
+      //const token = currentUser?.authorization?.token;
 
       const response = await fetch(`${API_URL}/gerar_checklist`, {
         method: 'POST',

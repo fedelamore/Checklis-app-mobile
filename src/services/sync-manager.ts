@@ -14,7 +14,11 @@ import {
   updateFieldResponseSyncStatus,
   getFormResponseById,
   updateFormResponse,
+  deleteFieldResponse,
+  deleteFormResponseAndFields,
+  deleteChecklistFromCache,
 } from './db/checklists-db';
+import { Preferences } from '@capacitor/preferences';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -119,8 +123,6 @@ class SyncManager {
   // Sincroniza campos que não estão na fila mas precisam ser sincronizados
   private async syncUnsyncedFields() {
     const fields = await getUnsyncedFieldResponses();
-    console.log(`[SyncManager] Syncing ${fields.length} unsynced fields`);
-    console.log("fields: ", fields)
 
     // Agrupa campos por responseId para processar junto
     const fieldsByResponse = new Map<number, typeof fields>();
@@ -133,7 +135,7 @@ class SyncManager {
     // Processa cada resposta
     for (const [responseId, responseFields] of fieldsByResponse) {
       try {
-        const token = this.getAuthToken();
+        const token = await this.getAuthToken();
         if (!token) throw new Error('No auth token');
 
         const response = await getFormResponseById(responseId);
@@ -174,13 +176,16 @@ class SyncManager {
         }
 
         // Agora sincroniza os campos
-        if (!response.serverResponseId) {
-          console.warn(`[SyncManager] Still no serverResponseId for response ${responseId}, skipping fields`);
-          continue;
-        }
-        console.log("responseFields antes do for: ", responseFields)
         for (const field of responseFields) {
           try {
+            // Usa o serverResponseId do field primeiro, depois do formResponse
+            const fieldServerResponseId = field.serverResponseId || response.serverResponseId;
+
+            if (!fieldServerResponseId) {
+              console.warn(`[SyncManager] No serverResponseId for field ${field.id}, skipping`);
+              continue;
+            }
+
             const res = await fetch(`${API_URL}/salvar_campo`, {
               method: 'POST',
               headers: {
@@ -192,18 +197,36 @@ class SyncManager {
               body: JSON.stringify({
                 valor: field.valor,
                 id_campo: field.serverFieldId || field.fieldId,
-                id_resposta: response.serverResponseId,
+                id_resposta: fieldServerResponseId,
                 web: 0,
               }),
             });
 
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-            await updateFieldResponseSyncStatus(field.id!, 'synced');
-            console.log(`[SyncManager] Field ${field.id} synced successfully`);
+            // Deleta o campo sincronizado do banco local
+            await deleteFieldResponse(field.id!);
+            console.log(`[SyncManager] Field ${field.id} synced and deleted from local DB`);
           } catch (error: any) {
             console.error(`[SyncManager] Error syncing field ${field.id}`, error);
             await updateFieldResponseSyncStatus(field.id!, 'error');
+          }
+        }
+
+        // Verifica se todos os campos desta resposta foram sincronizados
+        // Se sim, deleta a formResponse e o checklist do cache
+        const remainingFields = await getUnsyncedFieldResponses();
+        const hasRemainingForResponse = remainingFields.some(f => f.responseId === responseId);
+
+        if (!hasRemainingForResponse && response) {
+          // Deleta a formResponse
+          await deleteFormResponseAndFields(responseId);
+          console.log(`[SyncManager] FormResponse ${responseId} deleted from local DB`);
+
+          // Deleta o checklist do cache se existir
+          if (response.serverChecklistId) {
+            await deleteChecklistFromCache(response.serverChecklistId);
+            console.log(`[SyncManager] Checklist ${response.serverChecklistId} deleted from cache`);
           }
         }
       } catch (error: any) {
@@ -227,7 +250,7 @@ class SyncManager {
 
         // Aqui você implementaria o upload real do arquivo
         // Por enquanto, vamos simular
-        const token = this.getAuthToken();
+        const token = await this.getAuthToken();
         if (!token) throw new Error('No auth token');
 
         // TODO: Implementar upload de arquivo real
@@ -245,13 +268,13 @@ class SyncManager {
 
   // Handlers para diferentes tipos de sincronização
   private async handleCreateResponse(payload: any) {
-    console.log('[SyncManager] Creating response on server', payload);
+    //console.log('[SyncManager] Creating response on server', payload);
     // Implementar criação de resposta no servidor
   }
 
   private async handleUpdateField(payload: any) {
     console.log('[SyncManager] Updating field on server', payload);
-    const token = this.getAuthToken();
+    const token = await this.getAuthToken();
     if (!token) throw new Error('No auth token');
 
     const res = await fetch(`${API_URL}/salvar_campo`, {
@@ -271,7 +294,7 @@ class SyncManager {
 
   private async handleSubmitForm(payload: any) {
     console.log('[SyncManager] Submitting form on server', payload);
-    const token = this.getAuthToken();
+    const token = await this.getAuthToken();
     if (!token) throw new Error('No auth token');
 
     const res = await fetch(`${API_URL}/checklist/${payload.checklistId}`, {
@@ -301,12 +324,15 @@ class SyncManager {
   }
 
   // Pega token do localStorage
-  private getAuthToken(): string | null {
+  private async getAuthToken(): Promise<string | null> {
     try {
-      const userStr = localStorage.getItem('current_user');
+      /*const userStr = localStorage.getItem('current_user');
       if (!userStr) return null;
       const user = JSON.parse(userStr);
-      return user?.authorization?.token || null;
+      return user?.authorization?.token || null;*/
+      const { value } = await Preferences.get({ key: 'token' });
+      const token = value;
+      return token;
     } catch {
       return null;
     }
