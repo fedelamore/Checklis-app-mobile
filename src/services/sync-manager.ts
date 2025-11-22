@@ -19,6 +19,7 @@ import {
   deleteChecklistFromCache,
 } from './db/checklists-db';
 import { Preferences } from '@capacitor/preferences';
+import { globalLoading } from '@/contexts/LoadingContext';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -52,6 +53,7 @@ class SyncManager {
     console.log('[SyncManager] Starting full sync...');
     this.isProcessing = true;
     this.notifyListeners();
+    globalLoading.show();
 
     try {
       // 1. Processar fila de sincronização
@@ -78,6 +80,7 @@ class SyncManager {
     } finally {
       this.isProcessing = false;
       this.notifyListeners();
+      globalLoading.hide();
     }
   }
 
@@ -178,13 +181,16 @@ class SyncManager {
         // Agora sincroniza os campos
         for (const field of responseFields) {
           try {
-            // Usa o serverResponseId do field primeiro, depois do formResponse
-            const fieldServerResponseId = field.serverResponseId || response.serverResponseId;
+            // Usa o serverResponseId do field primeiro, depois do formResponse, e por último o checklistId
+            const fieldServerResponseId = field.serverResponseId || response.serverResponseId || response.checklistId;
 
             if (!fieldServerResponseId) {
-              console.warn(`[SyncManager] No serverResponseId for field ${field.id}, skipping`);
+              console.warn(`[SyncManager] No serverResponseId or checklistId for field ${field.id}, skipping`);
               continue;
             }
+
+            console.log(`[SyncManager] Syncing field ${field.id} with id_resposta: ${fieldServerResponseId}`);
+
 
             const res = await fetch(`${API_URL}/salvar_campo`, {
               method: 'POST',
@@ -213,22 +219,8 @@ class SyncManager {
           }
         }
 
-        // Verifica se todos os campos desta resposta foram sincronizados
-        // Se sim, deleta a formResponse e o checklist do cache
-        const remainingFields = await getUnsyncedFieldResponses();
-        const hasRemainingForResponse = remainingFields.some(f => f.responseId === responseId);
-
-        if (!hasRemainingForResponse && response) {
-          // Deleta a formResponse
-          await deleteFormResponseAndFields(responseId);
-          console.log(`[SyncManager] FormResponse ${responseId} deleted from local DB`);
-
-          // Deleta o checklist do cache se existir
-          if (response.serverChecklistId) {
-            await deleteChecklistFromCache(response.serverChecklistId);
-            console.log(`[SyncManager] Checklist ${response.serverChecklistId} deleted from cache`);
-          }
-        }
+        // Nota: Não deletar formResponse ou checklist aqui
+        // A exclusão só deve ocorrer após o submit do formulário ser sincronizado
       } catch (error: any) {
         console.error(`[SyncManager] Error syncing response ${responseId}`, error);
         // Marca todos os campos desta resposta como erro

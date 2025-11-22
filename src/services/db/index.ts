@@ -59,6 +59,14 @@ export interface FileQueueDB {
   createdAt: number;
 }
 
+export interface FormularioDB {
+  id?: number;
+  serverId: number; // ID do formulário no servidor
+  nome: string;
+  campos: any[]; // JSON dos campos do formulário
+  lastModified: number;
+}
+
 // Configuração do Dexie
 class ChecklistDatabase extends Dexie {
   checklists!: Table<ChecklistDB, number>;
@@ -66,6 +74,7 @@ class ChecklistDatabase extends Dexie {
   fieldResponses!: Table<FieldResponseDB, number>;
   syncQueue!: Table<SyncQueueDB, number>;
   fileQueue!: Table<FileQueueDB, number>;
+  formularios!: Table<FormularioDB, number>;
 
   constructor() {
     super('ChecklistAppDB');
@@ -78,6 +87,16 @@ class ChecklistDatabase extends Dexie {
       fieldResponses: '++id, responseId, serverResponseId, fieldId, serverFieldId, syncStatus, lastModified',
       syncQueue: '++id, type, status, priority, createdAt',
       fileQueue: '++id, fieldResponseId, syncStatus, createdAt'
+    });
+
+    // Versão 4: Adiciona tabela de formulários para cache offline
+    this.version(4).stores({
+      checklists: '++id, serverId, syncStatus, lastModified',
+      formResponses: '++id, checklistId, serverChecklistId, serverResponseId, syncStatus, lastModified',
+      fieldResponses: '++id, responseId, serverResponseId, fieldId, serverFieldId, syncStatus, lastModified',
+      syncQueue: '++id, type, status, priority, createdAt',
+      fileQueue: '++id, fieldResponseId, syncStatus, createdAt',
+      formularios: '++id, serverId, lastModified'
     });
   }
 }

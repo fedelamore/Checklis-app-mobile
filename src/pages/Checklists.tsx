@@ -82,14 +82,23 @@ const Checklists = () => {
         const result: ChecklistApiResponse = await response.json();
 
         if (result.success && result.data?.data) {
-          setChecklists(result.data.data);
+          // Ordena por created_at (mais recente primeiro)
+          const sortedChecklists = result.data.data.sort((a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          );
+          setChecklists(sortedChecklists);
 
           // Salva a lista no localStorage para fallback offline
-          storage.overwriteChecklists(result.data.data);
+          storage.overwriteChecklists(sortedChecklists);
 
           // Download automático dos checklists em andamento para uso offline
           apiClient.downloadInProgressChecklistsForOffline(result.data.data).catch(err => {
             console.warn('[Checklists] Error auto-downloading checklists:', err);
+          });
+
+          // Cache dos formulários para criar checklists offline
+          apiClient.getFormularios().catch(err => {
+            console.warn('[Checklists] Error caching formulários:', err);
           });
         } else {
           toast.error('Erro ao processar dados dos checklists');
@@ -109,7 +118,11 @@ const Checklists = () => {
         const cachedChecklists = storage.getChecklists();
         if (cachedChecklists && cachedChecklists.length > 0) {
           console.log('[Checklists] Using cached checklists from localStorage');
-          setChecklists(cachedChecklists);
+          // Ordena por created_at (mais recente primeiro)
+          const sortedChecklists = cachedChecklists.sort((a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          );
+          setChecklists(sortedChecklists);
           toast.info('Mostrando dados offline');
         } else {
           throw new Error('Sem conexão e sem dados offline disponíveis');

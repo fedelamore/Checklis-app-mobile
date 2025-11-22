@@ -112,7 +112,7 @@ export function ChecklistForm() {
         setTitulo(data.data.titulo || "Checklist");
         setCampos(data.data.campos || []);
         setChecklistResposta(data.data.resposta);
-
+        console.log("fetchData setChecklistResposta: ", checklistResposta)
         console.log("[ChecklistForm] data.data.id:", data.data.id);
 
         // Verifica se já existe uma resposta local para este checklist
@@ -144,7 +144,7 @@ export function ChecklistForm() {
           // Pega o serverResponseId se existir em data.data.resposta
           const serverResponseId = (data.data.resposta && typeof data.data.resposta === 'object' && 'id' in data.data.resposta)
             ? (data.data.resposta as any).id
-            : null;
+            : data.data.id;
 
           console.log("[ChecklistForm] Creating new response with serverResponseId:", serverResponseId, "formId:", data.data.id);
 
@@ -284,6 +284,7 @@ export function ChecklistForm() {
         }
 
         // Salva offline e online usando a mesma função dos campos de texto
+        console.log("antes do sendValueCampo 1: ", checklistResposta)
         await sendValueCampo(valorParaSalvar, campo, checklistResposta);
         toast.success('Foto capturada e salva com sucesso!');
 
@@ -397,6 +398,7 @@ export function ChecklistForm() {
     }
 
     // Salva offline e online usando a mesma função dos campos de texto
+    console.log("antes do sendValueCampo 2: ", checklistResposta)
     await sendValueCampo(valorParaSalvar, campo, checklistResposta);
 
     closeCamera();
@@ -489,7 +491,7 @@ export function ChecklistForm() {
       if (campoIndex !== -1) {
         const campo = campos[campoIndex];
         console.log("stopDrawing123")
-        console.log(dataUrl, campo, checklistResposta)
+        console.log("antes do sendValueCampo 3: ", checklistResposta)
         sendValueCampo(dataUrl, campo, checklistResposta);
       }
     }
@@ -551,6 +553,7 @@ export function ChecklistForm() {
         const newValue = checked ? [...atual, option] : atual.filter((v: string) => v !== option);
 
         // Salva imediatamente para checkboxes
+        console.log("antes do sendValueCampo 4: ", checklistResposta)
         sendValueCampo(newValue, campo, checklistResposta);
 
         return { ...prev, [key]: newValue };
@@ -573,6 +576,7 @@ export function ChecklistForm() {
     // Para selects, salva imediatamente também
     if (campo.tipo === "select_unico") {
       setFormValues((prev) => ({ ...prev, [key]: e.target.value }));
+      console.log("antes do sendValueCampo 5: ", checklistResposta)
       sendValueCampo(e.target.value, campo, checklistResposta);
       return;
     }
@@ -590,15 +594,17 @@ export function ChecklistForm() {
 
     if(valor !== "") {
       // Salva o valor atual no banco
+      console.log("antes do sendValueCampo 7: ", checklistResposta)
       sendValueCampo(valor, campo, checklistResposta);
     }
   }
 
   async function sendValueCampo(valor: any, campo: Campo, resposta: any) {
     try {
-      console.log("ENTROU")
+      console.log("INICIO sendValueCampo")
       if (!localResponseId || !campo.id) return;
-      console.log("DOIS")
+      console.log("localResponseId: ", localResponseId)
+      console.log("resposta: ", resposta)
       // Salva localmente  primeiro (sempre)
       await saveFieldResponse(
         localResponseId,

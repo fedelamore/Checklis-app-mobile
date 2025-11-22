@@ -14,6 +14,7 @@ import NotFound from "./pages/NotFound";
 import { useOnlineStatus } from "./hooks/useOnlineStatus";
 import { debugDatabaseSchema } from "./services/db";
 import { useEffect } from "react";
+import { LoadingProvider } from "./contexts/LoadingContext";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -85,9 +86,11 @@ const AppContent = () => {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <AppContent />
+      <LoadingProvider>
+        <Toaster />
+        <Sonner />
+        <AppContent />
+      </LoadingProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );

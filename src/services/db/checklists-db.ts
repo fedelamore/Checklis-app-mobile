@@ -1,4 +1,4 @@
-import { db, ChecklistDB, FormResponseDB, FieldResponseDB } from './index';
+import { db, ChecklistDB, FormResponseDB, FieldResponseDB, FormularioDB } from './index';
 
 // ==================== CHECKLISTS ====================
 
@@ -6,6 +6,7 @@ export const saveChecklistLocal = async (
   checklist: Omit<ChecklistDB, 'id' | 'lastModified' | 'createdAt'>
 ): Promise<number> => {
   const now = Date.now();
+  console.log("INICIO saveChecklistLocal");
   const id = await db.checklists.add({
     ...checklist,
     lastModified: now,
@@ -55,6 +56,8 @@ export const createFormResponse = async (
   serverResponseId?: number
 ): Promise<number> => {
   const now = Date.now();
+  console.log("INICIO createFormResponse");
+  console.log("serverResponseId: ", serverResponseId);
   const id = await db.formResponses.add({
     checklistId,
     serverChecklistId,
@@ -111,7 +114,9 @@ export const saveFieldResponse = async (
   serverResponseId?: number
 ): Promise<number> => {
   const now = Date.now();
-
+  console.log("INICIO saveFieldResponse");
+  console.log("serverResponseId: ", serverResponseId);
+  console.log("responseId: ", responseId);
   // Busca todas as respostas de campo para esse responseId
   // e filtra manualmente por fieldId (sem usar índice composto)
   const allFieldsForResponse = await db.fieldResponses
@@ -223,4 +228,41 @@ export const deleteChecklistFromCache = async (serverId: number): Promise<void> 
   if (checklist && checklist.id) {
     await db.checklists.delete(checklist.id);
   }
+};
+
+// ==================== FORMULARIOS (CACHE OFFLINE) ====================
+
+export const saveFormularioLocal = async (
+  formulario: Omit<FormularioDB, 'id' | 'lastModified'>
+): Promise<number> => {
+  const now = Date.now();
+
+  // Verifica se já existe
+  const existing = await db.formularios.where('serverId').equals(formulario.serverId).first();
+  if (existing) {
+    await db.formularios.update(existing.id!, {
+      ...formulario,
+      lastModified: now,
+    });
+    return existing.id!;
+  }
+
+  const id = await db.formularios.add({
+    ...formulario,
+    lastModified: now,
+  });
+  return id;
+};
+
+export const getAllFormularios = async (): Promise<FormularioDB[]> => {
+  const formularios = await db.formularios.toArray();
+  return formularios.sort((a, b) => a.nome.localeCompare(b.nome));
+};
+
+export const getFormularioByServerId = async (serverId: number): Promise<FormularioDB | undefined> => {
+  return await db.formularios.where('serverId').equals(serverId).first();
+};
+
+export const clearFormulariosCache = async (): Promise<void> => {
+  await db.formularios.clear();
 };
