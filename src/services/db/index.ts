@@ -16,6 +16,7 @@ export interface FormResponseDB {
   checklistId: number; // ID local do checklist
   serverChecklistId?: number; // ID do checklist no servidor
   serverResponseId?: number; // ID da resposta no servidor
+  formularioId?: number; // ID do formulário no servidor (para checklists criados offline)
   formValues: Record<string, any>; // Valores preenchidos do formulário
   isComplete: boolean;
   syncStatus: 'local_only' | 'syncing' | 'synced' | 'conflict' | 'error';

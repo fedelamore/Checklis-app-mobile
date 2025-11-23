@@ -20,6 +20,7 @@ import {
 } from './db/checklists-db';
 import { Preferences } from '@capacitor/preferences';
 import { globalLoading } from '@/contexts/LoadingContext';
+import { storage } from '@/utils/storage';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -147,42 +148,99 @@ class SyncManager {
           continue;
         }
 
+        console.log("ANTES DE CHAMAR O GERAR CHECKLIST");
+        console.log("response.serverResponseId: ", response.serverResponseId);
+        console.log("response.serverChecklistId: ", response.serverChecklistId);
+        console.log("response.formularioId: ", response.formularioId);
+        console.log("!response.serverResponseId: ", !response.serverResponseId);
+        console.log("!response.serverChecklistId: ", !response.serverChecklistId);
+        console.log("!response.formularioId: ", !response.formularioId);
         // Se não tem serverResponseId, precisa criar a resposta no servidor primeiro
-        if (!response.serverResponseId && response.serverChecklistId) {
-          console.log(`[SyncManager] Creating response on server for checklist ${response.serverChecklistId}`);
+        if (!response.serverResponseId) {
+          // Caso 1: Checklist criado offline 
+          if (!response.serverChecklistId) {
+            console.log(`[SyncManager] Creating offline checklist on server for formulario ${response.formularioId}`);
 
-          // Cria a resposta no servidor (gera o serverResponseId)
-          const createRes = await fetch(`${API_URL}/gerar_checklist/${response.serverChecklistId}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              'Authorization': `Bearer ${token}`,
-              'X-Requested-With': 'XMLHttpRequest',
-            },
-            body: JSON.stringify({}),
-          });
+            // Pega o id do usuário logado
+            const user = storage.getUser();
+            const userId = user?.id || 1;
 
-          if (!createRes.ok) throw new Error(`HTTP ${createRes.status}`);
+            // Primeiro cria o checklist no servidor via POST /gerar_checklist
+            const createRes = await fetch(`${API_URL}/gerar_checklist`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'X-Requested-With': 'XMLHttpRequest',
+              },
+              body: JSON.stringify({
+                id_formulario: response.formularioId,
+                id_usuario: userId,
+              }),
+            });
 
-          const createData = await createRes.json();
-          const serverResponseId = createData?.data?.id;
+            if (!createRes.ok) throw new Error(`HTTP ${createRes.status}`);
 
-          if (serverResponseId) {
-            // Atualiza o serverResponseId local
-            await updateFormResponse(responseId, { serverResponseId });
-            response.serverResponseId = serverResponseId;
-            console.log(`[SyncManager] Created server response: ${serverResponseId}`);
+            const createData = await createRes.json();
+            console.log('[SyncManager] Server response for gerar_checklist:', JSON.stringify(createData, null, 2));
+            // O id retornado é o id_resposta
+            const serverResponseId = createData?.data?.id;
+            const serverChecklistId = createData?.data?.id;
+
+            if (serverResponseId) {
+              // Atualiza o serverResponseId e serverChecklistId local
+              await updateFormResponse(responseId, {
+                serverResponseId,
+                serverChecklistId
+              });
+              response.serverResponseId = serverResponseId;
+              response.serverChecklistId = serverChecklistId;
+              console.log(`[SyncManager] Created offline checklist on server - checklistId: ${serverChecklistId}, responseId: ${serverResponseId}`);
+            } else {
+              throw new Error('Server did not return response ID for offline checklist');
+            }
+          }
+          // Caso 2: Checklist do servidor mas sem resposta ainda (tem serverChecklistId)
+          else if (response.serverChecklistId) {
+            console.log(`[SyncManager] Creating response on server for checklist ${response.serverChecklistId}`);
+
+            // Cria a resposta no servidor (gera o serverResponseId)
+            const createRes = await fetch(`${API_URL}/gerar_checklist/`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'X-Requested-With': 'XMLHttpRequest',
+              },
+              body: JSON.stringify({}),
+            });
+
+            if (!createRes.ok) throw new Error(`HTTP ${createRes.status}`);
+
+            const createData = await createRes.json();
+            const serverResponseId = createData?.data?.id;
+
+            if (serverResponseId) {
+              // Atualiza o serverResponseId local
+              await updateFormResponse(responseId, { serverResponseId });
+              response.serverResponseId = serverResponseId;
+              console.log(`[SyncManager] Created server response: ${serverResponseId}`);
+            } else {
+              throw new Error('Server did not return response ID');
+            }
           } else {
-            throw new Error('Server did not return response ID');
+            console.warn(`[SyncManager] Response ${responseId} has no formularioId or serverChecklistId, skipping`);
+            continue;
           }
         }
 
         // Agora sincroniza os campos
         for (const field of responseFields) {
           try {
-            // Usa o serverResponseId do field primeiro, depois do formResponse, e por último o checklistId
-            const fieldServerResponseId = field.serverResponseId || response.serverResponseId || response.checklistId;
+            // Prioriza o serverResponseId do formResponse (que foi atualizado após criar no servidor)
+            const fieldServerResponseId = response.serverResponseId || field.serverResponseId || response.checklistId;
 
             if (!fieldServerResponseId) {
               console.warn(`[SyncManager] No serverResponseId or checklistId for field ${field.id}, skipping`);

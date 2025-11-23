@@ -224,6 +224,7 @@ export const apiClient = {
             campos: cached.campos,
             resposta: responseId ? { id: responseId } : {},
             respostasSalvas: {},
+            formularioId: lastResponse?.formularioId, // ID do formulário para checklists offline
           },
         };
       }
@@ -237,7 +238,7 @@ export const apiClient = {
   },
 
   // Salvar campo individual
-  async saveField(valor: any, id_campo: number, id_resposta: number, localResponseId?: number) {
+  async saveField(valor: any, id_campo: number, id_resposta: number, localResponseId?: number, id_formulario?: number) {
     globalLoading.show();
     try {
       const isOnline = await checkOnlineStatus();
@@ -255,6 +256,18 @@ export const apiClient = {
       // Se está online, tenta enviar para o servidor
       if (isOnline) {
         try {
+          const payload: any = {
+            valor,
+            id_campo,
+            id_resposta,
+            web: 0,
+          };
+
+          // Adiciona id_formulario se disponível (para checklists criados offline)
+          if (id_formulario) {
+            payload.id_formulario = id_formulario;
+          }
+
           const res = await fetch(`${API_URL}/salvar_campo`, {
             method: 'POST',
             headers: {
@@ -263,12 +276,7 @@ export const apiClient = {
               'Authorization': `Bearer ${token}`,
               'X-Requested-With': 'XMLHttpRequest',
             },
-            body: JSON.stringify({
-              valor,
-              id_campo,
-              id_resposta,
-              web: 0,
-            }),
+            body: JSON.stringify(payload),
           });
 
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -281,6 +289,7 @@ export const apiClient = {
             valor,
             id_campo,
             id_resposta,
+            id_formulario,
             web: 0,
           }, 5);
           throw error;
@@ -292,6 +301,7 @@ export const apiClient = {
           valor,
           id_campo,
           id_resposta,
+          id_formulario,
           web: 0,
         }, 5);
 
@@ -515,7 +525,8 @@ export const apiClient = {
       const localResponseId = await createFormResponse(
         localChecklistId,
         undefined, // serverChecklistId - será preenchido quando sincronizar
-        undefined  // serverResponseId - será preenchido quando sincronizar
+        undefined, // serverResponseId - será preenchido quando sincronizar
+        idFormulario // ID do formulário no servidor
       );
 
       // Adiciona à fila de sincronização

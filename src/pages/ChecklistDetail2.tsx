@@ -72,6 +72,7 @@ export function ChecklistForm() {
   const [isDrawing, setIsDrawing] = useState(false);
   const [localResponseId, setLocalResponseId] = useState<number | null>(null);
   const [serverResponseId, setServerResponseId] = useState<number | null>(null);
+  const [formularioId, setFormularioId] = useState<number | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [currentCameraKey, setCurrentCameraKey] = useState<string | null>(null);
@@ -112,6 +113,10 @@ export function ChecklistForm() {
         setTitulo(data.data.titulo || "Checklist");
         setCampos(data.data.campos || []);
         setChecklistResposta(data.data.resposta);
+        // Salva o formularioId se disponível (para checklists offline)
+        if ((data.data as any).formularioId) {
+          setFormularioId((data.data as any).formularioId);
+        }
         console.log("fetchData setChecklistResposta: ", checklistResposta)
         console.log("[ChecklistForm] data.data.id:", data.data.id);
 
@@ -617,19 +622,23 @@ export function ChecklistForm() {
       console.log("[ChecklistForm] Field saved locally:", campo.id, valor);
 
       // Tenta sincronizar online (o API Client cuida disso)
-      if (resposta?.id) {
+      // Usa serverResponseId do state em vez de resposta.id para evitar enviar ID local
+      if (serverResponseId) {
         try {
           await apiClient.saveField(
             valor,
             campo.id,
-            resposta.id,
-            localResponseId
+            serverResponseId,
+            localResponseId,
+            formularioId || undefined
           );
           console.log("[ChecklistForm] Field synced online:", campo.id);
         } catch (error) {
           // Erro online não é crítico - já está salvo localmente
           console.warn("[ChecklistForm] Field not synced (offline or error):", error);
         }
+      } else {
+        console.log("[ChecklistForm] No serverResponseId - field saved locally only (will sync later)");
       }
     } catch (error) {
       console.error('[ChecklistForm] Error saving field:', error);

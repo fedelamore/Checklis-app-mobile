@@ -53,15 +53,18 @@ export const deleteChecklistLocal = async (id: number): Promise<void> => {
 export const createFormResponse = async (
   checklistId: number,
   serverChecklistId?: number,
-  serverResponseId?: number
+  serverResponseId?: number,
+  formularioId?: number
 ): Promise<number> => {
   const now = Date.now();
   console.log("INICIO createFormResponse");
   console.log("serverResponseId: ", serverResponseId);
+  console.log("formularioId: ", formularioId);
   const id = await db.formResponses.add({
     checklistId,
     serverChecklistId,
     serverResponseId,
+    formularioId,
     formValues: {},
     isComplete: false,
     syncStatus: 'local_only',
