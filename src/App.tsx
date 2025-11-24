@@ -15,6 +15,7 @@ import { useOnlineStatus } from "./hooks/useOnlineStatus";
 import { debugDatabaseSchema } from "./services/db";
 import { useEffect } from "react";
 import { LoadingProvider } from "./contexts/LoadingContext";
+import AppLayout from './layouts/AppLayout';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -55,14 +56,16 @@ const AppContent = () => {
     <>
       <BrowserRouter>
         <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/" element={<Home />} />
-          <Route path="/checklists" element={<Checklists />} />
-          <Route path="/criar-checklist" element={<CreateChecklist />} />
-          <Route path="/editar-checklist/:id" element={<EditChecklist />} />
-          <Route path="/checklist/:id" element={<ChecklistDetail />} />
-          <Route path="/perfil" element={<Profile />} />
-          <Route path="*" element={<NotFound />} />
+            <Route element={<AppLayout />}>
+              <Route path="/login" element={<Login />} />
+              <Route path="/" element={<Home />} />
+              <Route path="/checklists" element={<Checklists />} />
+              <Route path="/criar-checklist" element={<CreateChecklist />} />
+              <Route path="/editar-checklist/:id" element={<EditChecklist />} />
+              <Route path="/checklist/:id" element={<ChecklistDetail />} />
+              <Route path="/perfil" element={<Profile />} />
+              <Route path="*" element={<NotFound />} />
+            </Route>
         </Routes>
       </BrowserRouter>
 

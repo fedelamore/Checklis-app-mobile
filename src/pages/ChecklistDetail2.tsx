@@ -14,6 +14,7 @@ import { Camera as CapacitorCamera, CameraResultType, CameraSource } from '@capa
 import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 
+
 type CampoTipo =
   | "texto_simples"
   | "texto_longo"
@@ -77,6 +78,7 @@ export function ChecklistForm() {
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [currentCameraKey, setCurrentCameraKey] = useState<string | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+
 
   // ---------- BUSCA OS CAMPOS NA API (COM SUPORTE OFFLINE) ----------
   useEffect(() => {
@@ -428,6 +430,8 @@ export function ChecklistForm() {
     };
   }, [stream]);
 
+
+
   // Funções para assinatura em canvas
   const ensureCanvasScale = () => {
     const canvas = canvasRef.current;
@@ -439,6 +443,16 @@ export function ChecklistForm() {
     const ctx = canvas.getContext("2d");
     if (ctx) ctx.scale(dpr, dpr);
   };
+
+  useEffect(() => {
+    ensureCanvasScale();
+
+    // se quiser ajustar quando a tela rotacionar / redimensionar:
+    const handleResize = () => ensureCanvasScale();
+    window.addEventListener("resize", handleResize);
+
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const getXY = (
     e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>
@@ -453,7 +467,7 @@ export function ChecklistForm() {
   const startDrawing = (
     e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>
   ) => {
-    ensureCanvasScale();
+    //ensureCanvasScale();
     setIsDrawing(true);
     const canvas = canvasRef.current;
     if (!canvas) return;

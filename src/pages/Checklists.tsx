@@ -210,18 +210,6 @@ const Checklists = () => {
             ) : (
               <Clock className="w-5 h-5 text-warning" />
             )}
-            <button
-              onClick={() => navigate(`/editar-checklist/${checklist.id}`)}
-              className="p-2 hover:bg-secondary rounded-lg transition-colors"
-            >
-              <Pencil className="w-4 h-4 text-muted-foreground" />
-            </button>
-            <button
-              onClick={() => setDeleteId(checklist.id)}
-              className="p-2 hover:bg-destructive/10 rounded-lg transition-colors"
-            >
-              <Trash2 className="w-4 h-4 text-destructive" />
-            </button>
           </div>
         </div>
       </Card>

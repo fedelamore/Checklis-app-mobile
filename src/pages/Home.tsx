@@ -18,7 +18,7 @@ const Home = () => {
 
   useEffect(() => {
     const user = storage.getUser();
-    
+
     if (!user) {
       navigate('/login');
       return;
