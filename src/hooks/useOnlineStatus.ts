@@ -56,7 +56,6 @@ export const useOnlineStatus = () => {
     const setupCapacitorListener = async () => {
       try {
         networkListener = await Network.addListener('networkStatusChange', status => {
-          console.log('[useOnlineStatus] Network status changed:', status.connected);
           const wasOffline = !previousOnlineState;
           const isNowOnline = status.connected;
 
@@ -65,11 +64,9 @@ export const useOnlineStatus = () => {
 
           // Se estava offline e agora está online, verifica pendentes e mostra modal
           if (wasOffline && isNowOnline) {
-            console.log('[useOnlineStatus] Back online, checking pending items...');
             setTimeout(async () => {
               const hasPending = await checkPendingItems();
               if (hasPending) {
-                console.log('[useOnlineStatus] Has pending items, showing modal...');
                 setShowSyncModal(true);
               } else {
                 console.log('[useOnlineStatus] No pending items');
@@ -86,18 +83,15 @@ export const useOnlineStatus = () => {
 
     // Listeners do navegador (fallback)
     const handleOnline = () => {
-      console.log('[useOnlineStatus] Browser online event');
       const wasOffline = !previousOnlineState;
       previousOnlineState = true;
       setIsOnline(true);
 
       // Verifica pendentes quando volta online
       if (wasOffline) {
-        console.log('[useOnlineStatus] Was offline, now online - checking pending items...');
         setTimeout(async () => {
           const hasPending = await checkPendingItems();
           if (hasPending) {
-            console.log('[useOnlineStatus] Has pending items, showing modal...');
             setShowSyncModal(true);
           } else {
             console.log('[useOnlineStatus] No pending items');
@@ -107,7 +101,6 @@ export const useOnlineStatus = () => {
     };
 
     const handleOffline = () => {
-      console.log('[useOnlineStatus] Browser offline event');
       previousOnlineState = false;
       setIsOnline(false);
     };

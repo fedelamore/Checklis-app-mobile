@@ -65,6 +65,8 @@ const Checklists = () => {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
             'Authorization': `Bearer ${token}`,
+            'Access-Control-Request-Method': 'POST',
+            'Access-Control-Request-Headers': 'Content-Type, Authorization'
           },
         });
 
@@ -117,7 +119,6 @@ const Checklists = () => {
         // Tenta buscar do localStorage (fallback offline)
         const cachedChecklists = storage.getChecklists();
         if (cachedChecklists && cachedChecklists.length > 0) {
-          console.log('[Checklists] Using cached checklists from localStorage');
           // Ordena por created_at (mais recente primeiro)
           const sortedChecklists = cachedChecklists.sort((a, b) =>
             new Date(b.created_at).getTime() - new Date(a.created_at).getTime()

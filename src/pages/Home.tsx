@@ -30,7 +30,6 @@ const Home = () => {
   const loadPendingChecklists = async () => {
     // Carrega respostas não sincronizadas do IndexedDB
     const unsynced = await getUnsyncedFormResponses();
-    console.log('[Home] Unsynced responses:', unsynced);
     setPendingResponses(unsynced);
   };
 

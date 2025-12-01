@@ -350,8 +350,6 @@ export function ChecklistForm() {
           audio: false
         });
 
-        console.log('[openCamera] Permissão concedida! Stream:', mediaStream);
-
         setStream(mediaStream);
         setCurrentCameraKey(key);
         setIsCameraOpen(true);
@@ -642,12 +640,9 @@ export function ChecklistForm() {
   function handleBlur(campo: Campo, index: number) {
     const key = getCampoKey(campo, index);
     const valor = formValues[key];
-    console.log("handleBlur valor:", valor, "tipo:", typeof valor);
-
 
     if(valor !== "") {
       // Salva o valor atual no banco
-      console.log("antes do sendValueCampo 7: ", checklistResposta)
       sendValueCampo(valor, campo, checklistResposta);
     }
   }
@@ -688,7 +683,6 @@ export function ChecklistForm() {
             formularioId || undefined
           );
 
-          console.log("[ChecklistForm] Field synced online successfully:", campo.id, result);
         } catch (error) {
           // Erro online - se for foto, notifica o usuário
           console.error("[ChecklistForm] Field not synced (offline or error):", error);
@@ -865,7 +859,6 @@ export function ChecklistForm() {
               type="button"
               onClick={(e) => {
                 e.preventDefault();
-                console.log('[Button Click] Leitura Automática - key:', key);
                 openCamera(key, true);
               }}
               className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-border rounded-lg cursor-pointer hover:bg-secondary/50 transition-colors"
@@ -908,7 +901,6 @@ export function ChecklistForm() {
               type="button"
               onClick={(e) => {
                 e.preventDefault();
-                console.log('[Button Click] Foto - key:', key);
                 openCamera(key);
               }}
               className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-border rounded-lg cursor-pointer hover:bg-secondary/50 transition-colors"
