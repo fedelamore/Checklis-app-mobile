@@ -35,7 +35,6 @@ const AppContent = () => {
   // Debug do schema do banco na inicialização
   useEffect(() => {
     debugDatabaseSchema().then(result => {
-      console.log('[App] Database schema debug result:', result);
     });
 
     // Registra handler para atualização do Service Worker

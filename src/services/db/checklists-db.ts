@@ -6,7 +6,6 @@ export const saveChecklistLocal = async (
   checklist: Omit<ChecklistDB, 'id' | 'lastModified' | 'createdAt'>
 ): Promise<number> => {
   const now = Date.now();
-  console.log("INICIO saveChecklistLocal");
   const id = await db.checklists.add({
     ...checklist,
     lastModified: now,
@@ -57,9 +56,6 @@ export const createFormResponse = async (
   formularioId?: number
 ): Promise<number> => {
   const now = Date.now();
-  console.log("INICIO createFormResponse");
-  console.log("serverResponseId: ", serverResponseId);
-  console.log("formularioId: ", formularioId);
   const id = await db.formResponses.add({
     checklistId,
     serverChecklistId,
@@ -117,9 +113,6 @@ export const saveFieldResponse = async (
   serverResponseId?: number
 ): Promise<number> => {
   const now = Date.now();
-  console.log("INICIO saveFieldResponse");
-  console.log("serverResponseId: ", serverResponseId);
-  console.log("responseId: ", responseId);
   // Busca todas as respostas de campo para esse responseId
   // e filtra manualmente por fieldId (sem usar índice composto)
   const allFieldsForResponse = await db.fieldResponses

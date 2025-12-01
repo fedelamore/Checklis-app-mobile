@@ -31,8 +31,7 @@ const Login = () => {
       // Debug - verificar se salvou
       const { value } = await Preferences.get({ key: 'token' });
       const token = value;
-      console.log('[Login] Token salvo:', value);
-
+      
       // sucesso
       storage.setUser({
         id: user.id,

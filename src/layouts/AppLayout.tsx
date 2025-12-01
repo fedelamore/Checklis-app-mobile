@@ -8,7 +8,6 @@ export default function AppLayout() {
 
   useEffect(() => {
     const sub = App.addListener('backButton', () => {
-      console.log('BACK BUTTON', location.pathname);
 
       // Se estiver na Home, pode fechar o app
       if (location.pathname === '/' || location.pathname === '/home') {

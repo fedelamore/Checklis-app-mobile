@@ -47,11 +47,9 @@ class SyncManager {
   // Inicia sincronização completa
   async syncAll() {
     if (this.isProcessing) {
-      console.log('[SyncManager] Sync already in progress');
       return;
     }
 
-    console.log('[SyncManager] Starting full sync...');
     this.isProcessing = true;
     this.notifyListeners();
     globalLoading.show();
@@ -61,14 +59,12 @@ class SyncManager {
       await this.processSyncQueue();
 
       // 2. Processar campos não sincronizados
-      console.log("2. Processar campos não sincronizados")
       await this.syncUnsyncedFields();
 
       // 3. Processar fila de arquivos
       await this.processFileQueue();
 
       const stats = await getSyncQueueStats();
-      console.log('[SyncManager] Sync completed', stats);
 
       if (stats.failed > 0) {
         toast.warning(`Sincronização concluída com ${stats.failed} erro(s)`);
@@ -88,7 +84,6 @@ class SyncManager {
   // Processa itens da fila de sincronização
   private async processSyncQueue() {
     const items = await getPendingSyncItems();
-    console.log(`[SyncManager] Processing ${items.length} sync queue items`);
 
     for (const item of items) {
       try {
@@ -148,18 +143,10 @@ class SyncManager {
           continue;
         }
 
-        console.log("ANTES DE CHAMAR O GERAR CHECKLIST");
-        console.log("response.serverResponseId: ", response.serverResponseId);
-        console.log("response.serverChecklistId: ", response.serverChecklistId);
-        console.log("response.formularioId: ", response.formularioId);
-        console.log("!response.serverResponseId: ", !response.serverResponseId);
-        console.log("!response.serverChecklistId: ", !response.serverChecklistId);
-        console.log("!response.formularioId: ", !response.formularioId);
         // Se não tem serverResponseId, precisa criar a resposta no servidor primeiro
         if (!response.serverResponseId) {
           // Caso 1: Checklist criado offline 
           if (!response.serverChecklistId) {
-            console.log(`[SyncManager] Creating offline checklist on server for formulario ${response.formularioId}`);
 
             // Pega o id do usuário logado
             const user = storage.getUser();
@@ -183,7 +170,6 @@ class SyncManager {
             if (!createRes.ok) throw new Error(`HTTP ${createRes.status}`);
 
             const createData = await createRes.json();
-            console.log('[SyncManager] Server response for gerar_checklist:', JSON.stringify(createData, null, 2));
             // O id retornado é o id_resposta
             const serverResponseId = createData?.data?.id;
             const serverChecklistId = createData?.data?.id;
@@ -196,14 +182,12 @@ class SyncManager {
               });
               response.serverResponseId = serverResponseId;
               response.serverChecklistId = serverChecklistId;
-              console.log(`[SyncManager] Created offline checklist on server - checklistId: ${serverChecklistId}, responseId: ${serverResponseId}`);
             } else {
               throw new Error('Server did not return response ID for offline checklist');
             }
           }
           // Caso 2: Checklist do servidor mas sem resposta ainda (tem serverChecklistId)
           else if (response.serverChecklistId) {
-            console.log(`[SyncManager] Creating response on server for checklist ${response.serverChecklistId}`);
 
             // Cria a resposta no servidor (gera o serverResponseId)
             const createRes = await fetch(`${API_URL}/gerar_checklist/`, {
@@ -226,7 +210,6 @@ class SyncManager {
               // Atualiza o serverResponseId local
               await updateFormResponse(responseId, { serverResponseId });
               response.serverResponseId = serverResponseId;
-              console.log(`[SyncManager] Created server response: ${serverResponseId}`);
             } else {
               throw new Error('Server did not return response ID');
             }
@@ -246,9 +229,6 @@ class SyncManager {
               console.warn(`[SyncManager] No serverResponseId or checklistId for field ${field.id}, skipping`);
               continue;
             }
-
-            console.log(`[SyncManager] Syncing field ${field.id} with id_resposta: ${fieldServerResponseId}`);
-
 
             const res = await fetch(`${API_URL}/salvar_campo`, {
               method: 'POST',
@@ -270,7 +250,6 @@ class SyncManager {
 
             // Deleta o campo sincronizado do banco local
             await deleteFieldResponse(field.id!);
-            console.log(`[SyncManager] Field ${field.id} synced and deleted from local DB`);
           } catch (error: any) {
             console.error(`[SyncManager] Error syncing field ${field.id}`, error);
             await updateFieldResponseSyncStatus(field.id!, 'error');
@@ -292,7 +271,6 @@ class SyncManager {
   // Processa fila de arquivos (fotos, assinaturas)
   private async processFileQueue() {
     const files = await getPendingFiles();
-    console.log(`[SyncManager] Processing ${files.length} files`);
 
     for (const file of files) {
       try {
@@ -323,7 +301,6 @@ class SyncManager {
   }
 
   private async handleUpdateField(payload: any) {
-    console.log('[SyncManager] Updating field on server', payload);
     const token = await this.getAuthToken();
     if (!token) throw new Error('No auth token');
 
@@ -343,7 +320,6 @@ class SyncManager {
   }
 
   private async handleSubmitForm(payload: any) {
-    console.log('[SyncManager] Submitting form on server', payload);
     const token = await this.getAuthToken();
     if (!token) throw new Error('No auth token');
 

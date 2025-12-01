@@ -110,7 +110,6 @@ export function ChecklistForm() {
 
         // Usa o API Client que tem fallback offline
         const data: { data: ChecklistData } = await apiClient.getChecklist(Number(id));
-        console.log("[ChecklistForm] data: ", data);
 
         setTitulo(data.data.titulo || "Checklist");
         setCampos(data.data.campos || []);
@@ -119,8 +118,6 @@ export function ChecklistForm() {
         if ((data.data as any).formularioId) {
           setFormularioId((data.data as any).formularioId);
         }
-        console.log("fetchData setChecklistResposta: ", checklistResposta)
-        console.log("[ChecklistForm] data.data.id:", data.data.id);
 
         // Verifica se já existe uma resposta local para este checklist
         const { getFormResponsesByChecklistId, getFieldResponsesByResponseId, getFormResponseByServerResponseId } = await import("@/services/db/checklists-db");
@@ -128,16 +125,13 @@ export function ChecklistForm() {
         // Tenta encontrar resposta existente de 3 formas:
         // 1. Por checklistId local (URL param)
         let existingResponses = await getFormResponsesByChecklistId(Number(id));
-        console.log("[ChecklistForm] Existing responses by checklistId:");
 
         // 2. Se não encontrou e tem resposta do servidor, busca por serverResponseId
         if (existingResponses.length === 0 && data.data.resposta && typeof data.data.resposta === 'object' && 'id' in data.data.resposta) {
           const serverResponseId = (data.data.resposta as any).id;
-          console.log("[ChecklistForm] Tentando buscar por serverResponseId:", serverResponseId);
           const byServerResponse = await getFormResponseByServerResponseId(serverResponseId);
           if (byServerResponse) {
             existingResponses = [byServerResponse];
-            console.log("[ChecklistForm] Found response by serverResponseId:", serverResponseId);
           }
         }
 
@@ -145,7 +139,6 @@ export function ChecklistForm() {
         if (existingResponses.length > 0) {
           // Usa a resposta existente (a mais recente)
           responseId = existingResponses[existingResponses.length - 1].id!;
-          console.log("[ChecklistForm] Using existing local response:", responseId);
         } else {
           // Cria uma nova resposta local no IndexedDB
           // Pega o serverResponseId se existir em data.data.resposta
@@ -153,14 +146,11 @@ export function ChecklistForm() {
             ? (data.data.resposta as any).id
             : data.data.id;
 
-          console.log("[ChecklistForm] Creating new response with serverResponseId:", serverResponseId, "formId:", data.data.id);
-
           responseId = await createFormResponse(
             Number(id),
             data.data.id,
             serverResponseId
           );
-          console.log("[ChecklistForm] Created new local response:", responseId, "with serverResponseId:", serverResponseId);
           setServerResponseId(serverResponseId);
         }
 
@@ -176,7 +166,6 @@ export function ChecklistForm() {
 
         // Carrega valores salvos localmente no IndexedDB
         const localFieldResponses = await getFieldResponsesByResponseId(responseId);
-        console.log("[ChecklistForm] Local field responses:", localFieldResponses);
 
         // Cria mapa com valores salvos localmente
         // IMPORTANTE: Usa string como chave, igual ao getCampoKey()
@@ -190,7 +179,6 @@ export function ChecklistForm() {
         const serverValuesMap = new Map<string, any>();
         if (savedValues && Object.keys(savedValues).length > 0) {
           Object.values(savedValues).forEach(resposta => {
-            console.log("resposta: ", resposta)
             if (resposta.id_campo) {
               serverValuesMap.set(String(resposta.id_campo), resposta.valor.valor);
             }
@@ -202,17 +190,14 @@ export function ChecklistForm() {
         (data.data.campos || []).forEach((campo, index) => {
           const key = getCampoKey(campo, index);
 
-          console.log("campo: ", campo)
           // Prioriza valor local, depois servidor, depois valor padrão
           // IMPORTANTE: usa key (string) para buscar no mapa
           const localValue = localValuesMap.get(key);
           const serverValue = serverValuesMap.get(key);
           const savedValue = localValue ?? serverValue;
 
-          console.log("key:", key)
           init[key] = savedValue ?? (campo.tipo === "select_multiplo" ? [] : "");
         });
-        console.log("init: ", init)
         setFormValues(init);
       } catch (err: any) {
         setError(err.message || "Erro inesperado");
@@ -231,32 +216,89 @@ export function ChecklistForm() {
     return campo.id ? String(campo.id) : `campo_${index}`;
   }
 
+  // Função para redimensionar imagem mantendo aspect ratio
+  const resizeImage = async (dataUrl: string, maxWidth: number = 1920, maxHeight: number = 1080): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+
+      img.onload = () => {
+        // Calcula as novas dimensões mantendo aspect ratio
+        let width = img.width;
+        let height = img.height;
+
+        // Se a imagem já é menor que o máximo, retorna sem redimensionar
+        if (width <= maxWidth && height <= maxHeight) {
+          resolve(dataUrl);
+          return;
+        }
+
+        // Calcula a escala necessária
+        const widthRatio = maxWidth / width;
+        const heightRatio = maxHeight / height;
+        const scale = Math.min(widthRatio, heightRatio);
+
+        width = Math.floor(width * scale);
+        height = Math.floor(height * scale);
+
+        // Cria canvas para redimensionar
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Não foi possível criar contexto do canvas'));
+          return;
+        }
+
+        // Desenha a imagem redimensionada
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Converte para base64 com qualidade 0.85
+        const resizedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+        resolve(resizedDataUrl);
+      };
+
+      img.onerror = () => {
+        reject(new Error('Erro ao carregar imagem para redimensionar'));
+      };
+
+      img.src = dataUrl;
+    });
+  };
+
   // ---------- FUNÇÕES DE CÂMERA ----------
   const openCamera = async (key: string, isLeituraAutomatica: boolean = false) => {
-    console.log('[openCamera] Iniciando abertura da câmera para key:', key);
 
     try {
       // Verifica se está rodando em plataforma nativa (Android/iOS)
       const isNative = Capacitor.isNativePlatform();
-      console.log('[openCamera] Is native platform:', isNative);
 
       if (isNative) {
         // Usa o plugin nativo do Capacitor
-        console.log('[openCamera] Usando Capacitor Camera (nativo)');
 
         const image = await CapacitorCamera.getPhoto({
-          quality: 80,
+          quality: 60,
           allowEditing: false,
           resultType: CameraResultType.DataUrl,
           source: CameraSource.Camera,
         });
 
-        console.log('[openCamera] Foto capturada via Capacitor');
-
         // Processa a foto capturada
         const imageDataUrl = image.dataUrl;
         if (!imageDataUrl) {
           toast.error('Erro ao capturar foto');
+          return;
+        }
+
+        // Redimensiona a imagem antes de salvar
+        let resizedImageDataUrl: string;
+        try {
+          resizedImageDataUrl = await resizeImage(imageDataUrl);
+        } catch (error) {
+          console.error('[openCamera] Erro ao redimensionar imagem:', error);
+          toast.error('Erro ao processar imagem');
           return;
         }
 
@@ -274,7 +316,7 @@ export function ChecklistForm() {
         if (campo.tipo === 'leitura_automatica') {
           // Para leitura automática, mantém o objeto com foto e ocrTexto
           const valorAtual = formValues[key] || {};
-          valorParaSalvar = { ...valorAtual, foto: imageDataUrl };
+          valorParaSalvar = { ...valorAtual, imageDataUrl: resizedImageDataUrl };
 
           setFormValues((prev) => ({
             ...prev,
@@ -282,22 +324,20 @@ export function ChecklistForm() {
           }));
         } else {
           // Para foto simples, salva apenas a string base64
-          valorParaSalvar = imageDataUrl;
+          valorParaSalvar = resizedImageDataUrl;
 
           setFormValues((prev) => ({
             ...prev,
-            [key]: imageDataUrl,
+            [key]: resizedImageDataUrl,
           }));
         }
 
         // Salva offline e online usando a mesma função dos campos de texto
-        console.log("antes do sendValueCampo 1: ", checklistResposta)
         await sendValueCampo(valorParaSalvar, campo, checklistResposta);
         toast.success('Foto capturada e salva com sucesso!');
 
       } else {
         // Usa a API web do navegador (fallback para web)
-        console.log('[openCamera] Usando getUserMedia (web)');
 
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           console.error('[openCamera] API getUserMedia não disponível');
@@ -319,7 +359,6 @@ export function ChecklistForm() {
         // Aguarda o videoRef estar disponível
         setTimeout(() => {
           if (videoRef.current) {
-            console.log('[openCamera] VideoRef disponível, atribuindo stream');
             videoRef.current.srcObject = mediaStream;
           } else {
             console.error('[openCamera] VideoRef não disponível após timeout');
@@ -346,10 +385,6 @@ export function ChecklistForm() {
   };
 
   const capturePhoto = async () => {
-    console.log('[capturePhoto] Função chamada');
-    console.log('[capturePhoto] videoRef.current:', videoRef.current);
-    console.log('[capturePhoto] currentCameraKey:', currentCameraKey);
-
     if (!videoRef.current || !currentCameraKey) {
       console.error('[capturePhoto] Condição falhou - videoRef ou currentCameraKey ausente');
       return;
@@ -360,8 +395,6 @@ export function ChecklistForm() {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
-    console.log('[capturePhoto] Canvas criado - width:', canvas.width, 'height:', canvas.height);
-
     const ctx = canvas.getContext('2d');
     if (!ctx) {
       console.error('[capturePhoto] Não foi possível obter contexto do canvas');
@@ -371,7 +404,16 @@ export function ChecklistForm() {
     ctx.drawImage(video, 0, 0);
     const imageDataUrl = canvas.toDataURL('image/jpeg', 0.8);
 
-    console.log('[capturePhoto] Foto capturada, tamanho:', imageDataUrl.length, 'bytes');
+    // Redimensiona a imagem antes de salvar
+    let resizedImageDataUrl: string;
+    try {
+      resizedImageDataUrl = await resizeImage(imageDataUrl);
+    } catch (error) {
+      console.error('[capturePhoto] Erro ao redimensionar imagem:', error);
+      toast.error('Erro ao processar imagem');
+      closeCamera();
+      return;
+    }
 
     // Verifica se é campo de leitura automática
     const campoIndex = campos.findIndex((c, idx) => getCampoKey(c, idx) === currentCameraKey);
@@ -388,7 +430,7 @@ export function ChecklistForm() {
     if (campo.tipo === 'leitura_automatica') {
       // Para leitura automática, mantém o objeto com foto e ocrTexto
       const valorAtual = formValues[currentCameraKey] || {};
-      valorParaSalvar = { ...valorAtual, foto: imageDataUrl };
+      valorParaSalvar = { ...valorAtual, imageDataUrl: resizedImageDataUrl };
 
       setFormValues((prev) => ({
         ...prev,
@@ -396,16 +438,15 @@ export function ChecklistForm() {
       }));
     } else {
       // Para foto simples, salva apenas a string base64
-      valorParaSalvar = imageDataUrl;
+      valorParaSalvar = resizedImageDataUrl;
 
       setFormValues((prev) => ({
         ...prev,
-        [currentCameraKey]: imageDataUrl,
+        [currentCameraKey]: resizedImageDataUrl,
       }));
     }
 
     // Salva offline e online usando a mesma função dos campos de texto
-    console.log("antes do sendValueCampo 2: ", checklistResposta)
     await sendValueCampo(valorParaSalvar, campo, checklistResposta);
 
     closeCamera();
@@ -497,20 +538,15 @@ export function ChecklistForm() {
   const stopDrawing = (key: string) => {
     setIsDrawing(false);
     const canvas = canvasRef.current;
-    console.log("canvasRef: ", canvasRef)
-    console.log("canvas: ", canvas)
     if (canvas) {
       const dataUrl = canvas.toDataURL();
       setFormValues((prev) => ({ ...prev, [key]: dataUrl }));
 
       // Encontra o campo correspondente e salva
       const campoIndex = campos.findIndex((c, idx) => getCampoKey(c, idx) === key);
-      console.log("campoIndex")
 
       if (campoIndex !== -1) {
         const campo = campos[campoIndex];
-        console.log("stopDrawing123")
-        console.log("antes do sendValueCampo 3: ", checklistResposta)
         sendValueCampo(dataUrl, campo, checklistResposta);
       }
     }
@@ -572,7 +608,6 @@ export function ChecklistForm() {
         const newValue = checked ? [...atual, option] : atual.filter((v: string) => v !== option);
 
         // Salva imediatamente para checkboxes
-        console.log("antes do sendValueCampo 4: ", checklistResposta)
         sendValueCampo(newValue, campo, checklistResposta);
 
         return { ...prev, [key]: newValue };
@@ -595,7 +630,6 @@ export function ChecklistForm() {
     // Para selects, salva imediatamente também
     if (campo.tipo === "select_unico") {
       setFormValues((prev) => ({ ...prev, [key]: e.target.value }));
-      console.log("antes do sendValueCampo 5: ", checklistResposta)
       sendValueCampo(e.target.value, campo, checklistResposta);
       return;
     }
@@ -620,10 +654,11 @@ export function ChecklistForm() {
 
   async function sendValueCampo(valor: any, campo: Campo, resposta: any) {
     try {
-      console.log("INICIO sendValueCampo")
       if (!localResponseId || !campo.id) return;
-      console.log("localResponseId: ", localResponseId)
-      console.log("resposta: ", resposta)
+
+      // Detecta se é um campo de foto (string base64 grande ou objeto com imageDataUrl)
+      const isFotoField = campo.tipo === 'foto' || campo.tipo === 'leitura_automatica';
+
       // Salva localmente  primeiro (sempre)
       await saveFieldResponse(
         localResponseId,
@@ -633,29 +668,46 @@ export function ChecklistForm() {
         resposta?.id
       );
 
-      console.log("[ChecklistForm] Field saved locally:", campo.id, valor);
-
       // Tenta sincronizar online (o API Client cuida disso)
-      // Usa serverResponseId do state em vez de resposta.id para evitar enviar ID local
+      // Usa serverResponseId do state em vez de resposta.id para eviar enviar ID local
       if (serverResponseId) {
         try {
-          await apiClient.saveField(
+          ({
+            campoId: campo.id,
+            valor: valor,
+            serverResponseId,
+            localResponseId,
+            formularioId
+          });
+
+          const result = await apiClient.saveField(
             valor,
             campo.id,
             serverResponseId,
             localResponseId,
             formularioId || undefined
           );
-          console.log("[ChecklistForm] Field synced online:", campo.id);
+
+          console.log("[ChecklistForm] Field synced online successfully:", campo.id, result);
         } catch (error) {
-          // Erro online não é crítico - já está salvo localmente
-          console.warn("[ChecklistForm] Field not synced (offline or error):", error);
+          // Erro online - se for foto, notifica o usuário
+          console.error("[ChecklistForm] Field not synced (offline or error):", error);
+
+          if (isFotoField) {
+            toast.error(`Erro ao enviar ${campo.label}. A foto foi salva localmente e será sincronizada quando possível.`);
+          }
         }
       } else {
         console.log("[ChecklistForm] No serverResponseId - field saved locally only (will sync later)");
       }
     } catch (error) {
       console.error('[ChecklistForm] Error saving field:', error);
+
+      // Erro crítico ao salvar - sempre notifica
+      const isFotoField = campo.tipo === 'foto' || campo.tipo === 'leitura_automatica';
+      if (isFotoField) {
+        toast.error(`Erro ao salvar ${campo.label}. Por favor, tente novamente.`);
+      }
     }
   }
 
@@ -698,7 +750,6 @@ export function ChecklistForm() {
 
     setSubmitting(true);
     try {
-      console.log("[ChecklistForm] Submitting form values:", formValues);
 
       const { value } = await Preferences.get({ key: 'token' });
       const token = value;
@@ -819,9 +870,9 @@ export function ChecklistForm() {
               }}
               className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-border rounded-lg cursor-pointer hover:bg-secondary/50 transition-colors"
             >
-              {valor?.foto ? (
+              {valor?.imageDataUrl ? (
                 <img
-                  src={valor.foto}
+                  src={valor.imageDataUrl}
                   alt={campo.label}
                   className="h-full object-cover rounded-lg"
                 />
@@ -1048,7 +1099,6 @@ export function ChecklistForm() {
             <Button
               type="button"
               onClick={() => {
-                console.log('[Modal] Botão Capturar clicado');
                 capturePhoto();
               }}
               className="flex-1 bg-primary hover:bg-primary/90"

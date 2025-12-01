@@ -256,8 +256,14 @@ export const apiClient = {
       // Se está online, tenta enviar para o servidor
       if (isOnline) {
         try {
+          // Processa o valor para leitura_automatica (extrai apenas imageDataUrl se for um objeto)
+          let processedValor = valor;
+          if (typeof valor === 'object' && valor !== null && 'imageDataUrl' in valor) {
+            processedValor = valor.imageDataUrl;
+          }
+
           const payload: any = {
-            valor,
+            valor: processedValor,
             id_campo,
             id_resposta,
             web: 0,
@@ -267,6 +273,8 @@ export const apiClient = {
           if (id_formulario) {
             payload.id_formulario = id_formulario;
           }
+
+          console.log("[apiClient] Sending payload to API:", payload);
 
           const res = await fetch(`${API_URL}/salvar_campo`, {
             method: 'POST',
@@ -279,14 +287,29 @@ export const apiClient = {
             body: JSON.stringify(payload),
           });
 
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          console.log("[apiClient] Response status:", res.status, res.statusText);
 
-          return await res.json();
+          if (!res.ok) {
+            const errorText = await res.text();
+            console.error("[apiClient] Error response:", errorText);
+            throw new Error(`HTTP ${res.status}: ${errorText}`);
+          }
+
+          const result = await res.json();
+          console.log("[apiClient] Success response:", result);
+          return result;
         } catch (error) {
           console.error('[apiClient] Error saving field online, queuing for sync', error);
+
+          // Processa o valor para leitura_automatica (extrai apenas imageDataUrl se for um objeto)
+          let processedValor = valor;
+          if (typeof valor === 'object' && valor !== null && 'imageDataUrl' in valor) {
+            processedValor = valor.imageDataUrl;
+          }
+
           // Adiciona à fila de sincronização
           await addToSyncQueue('UPDATE_FIELD', {
-            valor,
+            valor: processedValor,
             id_campo,
             id_resposta,
             id_formulario,
@@ -297,8 +320,15 @@ export const apiClient = {
       } else {
         // Se está offline, adiciona à fila de sincronização
         console.log('[apiClient] Offline mode: queuing field save');
+
+        // Processa o valor para leitura_automatica (extrai apenas imageDataUrl se for um objeto)
+        let processedValor = valor;
+        if (typeof valor === 'object' && valor !== null && 'imageDataUrl' in valor) {
+          processedValor = valor.imageDataUrl;
+        }
+
         await addToSyncQueue('UPDATE_FIELD', {
-          valor,
+          valor: processedValor,
           id_campo,
           id_resposta,
           id_formulario,

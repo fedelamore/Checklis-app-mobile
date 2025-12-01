@@ -13,14 +13,16 @@ export type LoginResponse = {
 };
 
     export async function loginRequest(email: string, password: string): Promise<LoginResponse> {
-      console.log("API_URL: ", API_URL)
-      console.log('[auth] loginRequest called', { email });    
-      // não logue senhas em produção
       
       try {
           const res = await fetch(`${API_URL}/login`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json'},
+            headers: { 
+              'Content-Type': 'application/json', 
+              'Accept': 'application/json',
+              'Access-Control-Request-Method': 'POST',
+              'Access-Control-Request-Headers': 'Content-Type, Authorization'
+            },
             body: JSON.stringify({ email, password }),
           });
 
