@@ -55,11 +55,9 @@ export const apiClient = {
     const inProgress = checklistsData.filter(c => c.status === 'em_andamento');
 
     if (inProgress.length === 0) {
-      console.log('[apiClient] No in-progress checklists to download');
       return;
     }
 
-    console.log(`[apiClient] Auto-downloading ${inProgress.length} in-progress checklists for offline use...`);
     globalLoading.show();
 
     try {
@@ -68,7 +66,6 @@ export const apiClient = {
           // Verifica se já está em cache
           const cached = await getChecklistByServerId(checklist.id);
           if (cached) {
-            console.log(`[apiClient] Checklist ${checklist.id} already cached, skipping`);
             continue;
           }
 
@@ -98,13 +95,11 @@ export const apiClient = {
             syncStatus: 'synced',
           });
 
-          console.log(`[apiClient] ✓ Checklist ${checklist.id} ("${data.data.titulo}") cached for offline use`);
         } catch (error) {
           console.warn(`[apiClient] Error caching checklist ${checklist.id}:`, error);
         }
       }
 
-      console.log(`[apiClient] Offline caching complete - ${inProgress.length} checklists processed`);
     } finally {
       globalLoading.hide();
     }
@@ -117,7 +112,6 @@ export const apiClient = {
       const isOnline = await checkOnlineStatus();
       const token = await getAuthToken();
 
-      console.log(`[apiClient] getChecklist(${id}) - Online: ${isOnline}`);
 
       if (!token) {
         throw new Error('Token não encontrado. Faça login novamente.');
@@ -129,13 +123,11 @@ export const apiClient = {
         // Tenta buscar por ID local (para checklists criados offline)
         cached = await getChecklistById(id);
       }
-      console.log(`[apiClient] Cache lookup for checklist ${id}:`, cached ? 'FOUND' : 'NOT FOUND');
 
       // Se está online ou forçou busca online, tenta buscar da API
       // MAS: se o checklist foi criado offline (sem serverId), usa o cache local
       if ((isOnline || forceOnline) && (!cached || cached.serverId)) {
         try {
-          console.log(`[apiClient] Fetching checklist ${id} from API...`);
           const res = await fetch(`${API_URL}/checklist/${id}`, {
             method: 'GET',
             headers: {
@@ -149,7 +141,6 @@ export const apiClient = {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
           const data = await res.json();
-          console.log(`[apiClient] Successfully fetched checklist ${id} from API`);
 
           // Salva/atualiza no cache local
           const existingLocal = await getChecklistByServerId(id);
@@ -160,7 +151,6 @@ export const apiClient = {
               campos: data.data.campos,
               syncStatus: 'synced',
             });
-            console.log(`[apiClient] Updated checklist ${id} in cache`);
           } else {
             await saveChecklistLocal({
               serverId: id,
@@ -168,7 +158,6 @@ export const apiClient = {
               campos: data.data.campos,
               syncStatus: 'synced',
             });
-            console.log(`[apiClient] Saved new checklist ${id} to cache`);
           }
 
           return data;
@@ -177,7 +166,6 @@ export const apiClient = {
 
           // Se falhou mas tem cache, usa o cache como fallback
           if (cached) {
-            console.log('[apiClient] API failed, using cached checklist as fallback');
 
             // Busca o serverResponseId da formResponse local
             const formResponses = await getFormResponsesByChecklistId(id);
@@ -204,18 +192,15 @@ export const apiClient = {
 
       // Se está offline ou checklist foi criado offline (sem serverId), usa o cache
       if (cached) {
-        console.log('[apiClient] Using cached checklist (offline or local-only)');
 
         // Busca as formResponses pelo checklistId local
         const localChecklistId = cached.id!;
         const formResponses = await getFormResponsesByChecklistId(localChecklistId);
-        console.log("formResponses: ", formResponses)
 
         // Para checklists criados offline, usa o localResponseId
         // Para checklists do servidor, usa o serverResponseId
         const lastResponse = formResponses.length > 0 ? formResponses[formResponses.length - 1] : null;
         const responseId = lastResponse?.serverResponseId || lastResponse?.id;
-        console.log("responseId from getChecklist: ", responseId)
 
         return {
           data: {
@@ -274,8 +259,6 @@ export const apiClient = {
             payload.id_formulario = id_formulario;
           }
 
-          console.log("[apiClient] Sending payload to API:", payload);
-
           const res = await fetch(`${API_URL}/salvar_campo`, {
             method: 'POST',
             headers: {
@@ -287,8 +270,6 @@ export const apiClient = {
             body: JSON.stringify(payload),
           });
 
-          console.log("[apiClient] Response status:", res.status, res.statusText);
-
           if (!res.ok) {
             const errorText = await res.text();
             console.error("[apiClient] Error response:", errorText);
@@ -296,7 +277,6 @@ export const apiClient = {
           }
 
           const result = await res.json();
-          console.log("[apiClient] Success response:", result);
           return result;
         } catch (error) {
           console.error('[apiClient] Error saving field online, queuing for sync', error);
@@ -319,7 +299,6 @@ export const apiClient = {
         }
       } else {
         // Se está offline, adiciona à fila de sincronização
-        console.log('[apiClient] Offline mode: queuing field save');
 
         // Processa o valor para leitura_automatica (extrai apenas imageDataUrl se for um objeto)
         let processedValor = valor;
@@ -395,7 +374,6 @@ export const apiClient = {
         }
       } else {
         // Se está offline, adiciona à fila de sincronização
-        console.log('[apiClient] Offline mode: queuing form submission');
         await addToSyncQueue('SUBMIT_FORM', {
           checklistId,
           id_resposta,
@@ -462,14 +440,12 @@ export const apiClient = {
             });
           }
 
-          console.log(`[apiClient] Cached ${formularios.length} formulários for offline use`);
           return formularios;
         } catch (error) {
           console.error('[apiClient] Error fetching formulários:', error);
           // Tenta usar cache como fallback
           const cached = await getAllFormularios();
           if (cached.length > 0) {
-            console.log('[apiClient] Using cached formulários as fallback');
             return cached.map(f => ({ id: f.serverId, nome: f.nome, campos: f.campos }));
           }
           throw error;
@@ -479,7 +455,6 @@ export const apiClient = {
       // Se está offline, usa o cache
       const cached = await getAllFormularios();
       if (cached.length > 0) {
-        console.log('[apiClient] Offline mode: using cached formulários');
         return cached.map(f => ({ id: f.serverId, nome: f.nome, campos: f.campos }));
       }
 
@@ -527,7 +502,6 @@ export const apiClient = {
           if (error.message?.includes('Failed to fetch') ||
               error.message?.includes('Network') ||
               error.name === 'TypeError') {
-            console.log('[apiClient] Network error, falling back to offline mode:', error.message);
           } else {
             throw error; // Re-throw outros erros (como 401, 500, etc)
           }
@@ -535,7 +509,6 @@ export const apiClient = {
       }
 
       // Se está offline, cria localmente
-      console.log('[apiClient] Offline mode: creating checklist locally');
 
       // Busca o formulário do cache
       const formulario = await getFormularioByServerId(idFormulario);
@@ -580,8 +553,6 @@ export const apiClient = {
         },
         isOffline: true,
       } as any);
-
-      console.log(`[apiClient] Created offline checklist: ${localChecklistId}, response: ${localResponseId}`);
 
       return {
         success: true,
