@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, ClipboardList, Clock, RefreshCw } from 'lucide-react';
+import { User, ClipboardList, Clock, RefreshCw, Trash2 } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
 import { storage } from '@/utils/storage';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { getUnsyncedFormResponses } from '@/services/db/checklists-db';
+import { getUnsyncedFormResponses, deleteFormResponseAndFields } from '@/services/db/checklists-db';
 import { FormResponseDB } from '@/services/db';
 import { syncManager } from '@/services/sync-manager';
 import { toast } from 'sonner';
@@ -47,6 +47,20 @@ const Home = () => {
       console.error('[Home] Sync error:', error);
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const handleDeleteChecklist = async (e: React.MouseEvent, responseId: number) => {
+    e.stopPropagation(); // Previne navegação ao clicar no botão
+
+    try {
+      await deleteFormResponseAndFields(responseId);
+      toast.success('Checklist excluído com sucesso');
+      // Recarrega a lista após deletar
+      await loadPendingChecklists();
+    } catch (error) {
+      console.error('[Home] Delete error:', error);
+      toast.error('Erro ao excluir checklist');
     }
   };
 
@@ -113,7 +127,17 @@ const Home = () => {
                       {response.isComplete && ' • Completo'}
                     </p>
                   </div>
-                  <Clock className="w-5 h-5 text-warning" />
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-warning" />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={(e) => handleDeleteChecklist(e, response.id!)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               </Card>
             ))}

@@ -206,12 +206,31 @@ export const getFormDataWithFields = async (responseId: number) => {
 };
 
 export const deleteFormResponseAndFields = async (responseId: number): Promise<void> => {
+  // Busca a resposta para obter o checklistId
+  const response = await getFormResponseById(responseId);
+  if (!response) return;
+
   // Deleta todos os campos primeiro
   const fields = await getFieldResponsesByResponseId(responseId);
   await Promise.all(fields.map(f => db.fieldResponses.delete(f.id!)));
 
   // Deleta a resposta
   await db.formResponses.delete(responseId);
+
+  // Verifica se há outras respostas usando este checklist
+  const otherResponses = await db.formResponses
+    .where('checklistId')
+    .equals(response.checklistId)
+    .toArray();
+
+  // Se não há mais respostas usando este checklist, verifica se deve deletá-lo
+  if (otherResponses.length === 0) {
+    const checklist = await getChecklistById(response.checklistId);
+    // Só deleta o checklist se ele for local_only (não veio do servidor)
+    if (checklist && checklist.syncStatus === 'local_only') {
+      await db.checklists.delete(response.checklistId);
+    }
+  }
 };
 
 export const deleteFieldResponse = async (id: number): Promise<void> => {
